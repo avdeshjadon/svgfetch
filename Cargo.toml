@@ -22,18 +22,6 @@ path = "src/lib.rs"
 name = "svgfetch"
 path = "src/main.rs"
 
-[[bin]]
-name = "svg-fetch"
-path = "src/bin/svg_fetch.rs"
-
-[[bin]]
-name = "getsvg"
-path = "src/bin/getsvg.rs"
-
-[[bin]]
-name = "get-svg"
-path = "src/bin/get_svg.rs"
-
 [dependencies]
 # --- async runtime ---------------------------------------------------------
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "time", "sync"] }

@@ -8,9 +8,7 @@
   "main": "bin/run.js",
   "bin": {
     "svgfetch": "bin/run.js",
-    "svg-fetch": "bin/run.js",
-    "getsvg": "bin/run.js",
-    "get-svg": "bin/run.js"
+    "svg-fetch": "bin/run.js"
   },
   "scripts": {
     "postinstall": "node bin/install.js"
