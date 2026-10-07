@@ -18,11 +18,11 @@ pub fn init(debug: bool, verbose: bool) {
     DEBUG.store(debug, Ordering::Relaxed);
 
     let default_level = if debug {
-        "get_svg=debug,info"
+        "svgfetch=debug,info"
     } else if verbose {
-        "get_svg=info"
+        "svgfetch=info"
     } else {
-        "get_svg=warn"
+        "svgfetch=warn"
     };
 
     let filter =

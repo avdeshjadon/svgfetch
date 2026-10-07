@@ -19,7 +19,7 @@ fn bench_sanitize_filename(c: &mut Criterion) {
     c.bench_function("sanitize_filename (short)", |b| {
         b.iter(|| {
             for case in &cases {
-                black_box(get_svg::security::sanitize_filename(case));
+                black_box(svgfetch::security::sanitize_filename(case));
             }
         })
     });
@@ -32,7 +32,7 @@ fn bench_sanitize_filename(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let start = std::time::Instant::now();
             for _ in 0..iters {
-                let _ = black_box(get_svg::security::sanitize_filename(&long_name));
+                let _ = black_box(svgfetch::security::sanitize_filename(&long_name));
             }
             start.elapsed()
         });
@@ -43,13 +43,13 @@ fn bench_terminal_sanitization(c: &mut Criterion) {
     let evil = "\x1b[2J\x1b[1;31mGitHub\x1b]8;;http://evil\x07Logo\x07.svg";
     c.bench_function("sanitize_text (escapes)", |b| {
         b.iter(|| {
-            black_box(get_svg::security::sanitize_text(evil));
+            black_box(svgfetch::security::sanitize_text(evil));
         })
     });
     let plain = "A fairly long but entirely normal file name for the benchmark.svg";
     c.bench_function("sanitize_text (plain)", |b| {
         b.iter(|| {
-            black_box(get_svg::security::sanitize_text(plain));
+            black_box(svgfetch::security::sanitize_text(plain));
         })
     });
 }
@@ -76,7 +76,7 @@ fn bench_asset_parse(c: &mut Criterion) {
     });
     c.bench_function("parse asset from api json", |b| {
         b.iter(|| {
-            let a = get_svg::models::Asset::from_api_json(black_box(&value));
+            let a = svgfetch::models::Asset::from_api_json(black_box(&value));
             assert!(a.is_some());
         })
     });

@@ -17,15 +17,16 @@ use crate::error::{Error, Result};
 use crate::models::format_size;
 
 /// Base of the GitHub API URL. Overridable for testing via
-/// `GET_SVG_UPDATE_REPO` (must point at an API root that serves
-/// `/repos/avdeshjadon/get-svg/releases/latest`).
+/// `SVGFETCH_UPDATE_REPO` (must point at an API root that serves
+/// `/repos/avdeshjadon/svgfetch/releases/latest`).
 fn api_root() -> String {
-    std::env::var("GET_SVG_UPDATE_REPO")
-        .unwrap_or_else(|_| "https://api.github.com/repos/avdeshjadon/get-svg".to_string())
+    std::env::var("SVGFETCH_UPDATE_REPO")
+        .or_else(|_| std::env::var("GET_SVG_UPDATE_REPO"))
+        .unwrap_or_else(|_| "https://api.github.com/repos/avdeshjadon/svgfetch".to_string())
 }
 
 fn repo_home() -> &'static str {
-    "https://github.com/avdeshjadon/get-svg"
+    "https://github.com/avdeshjadon/svgfetch"
 }
 
 #[derive(Debug, Deserialize)]
@@ -218,14 +219,18 @@ fn find_binaries(root: &Path) -> Result<Vec<PathBuf>> {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            if name == format!("get-svg{ext}") || name == format!("getsvg{ext}") {
+            if name == format!("svgfetch{ext}")
+                || name == format!("svg-fetch{ext}")
+                || name == format!("get-svg{ext}")
+                || name == format!("getsvg{ext}")
+            {
                 found.push(entry);
             }
         }
     }
     if found.is_empty() {
         return Err(Error::Other(
-            "release archive contained no get-svg binary".to_string(),
+            "release archive contained no svgfetch binary".to_string(),
         ));
     }
     Ok(found)

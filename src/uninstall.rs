@@ -13,9 +13,9 @@ use crate::config::Settings;
 use crate::error::{Error, Result};
 
 /// The download folder is only wiped automatically when it is the default
-/// `get-svg` folder. A custom `download_directory` may point anywhere, so it
+/// `svgfetch` folder. A custom `download_directory` may point anywhere, so it
 /// is left alone (and reported) instead of risking unrelated user data.
-const DEFAULT_DOWNLOAD_NAME: &str = "get-svg";
+const DEFAULT_DOWNLOAD_NAME: &str = "svgfetch";
 
 /// What would be removed, computed up front so we can show it and confirm.
 #[derive(Debug, Clone)]
@@ -59,14 +59,14 @@ fn collect_plan_with_exe(settings: &Settings, exe: Option<&Path>) -> UninstallPl
         && settings
             .download_dir
             .file_name()
-            .map(|n| n == DEFAULT_DOWNLOAD_NAME)
+            .map(|n| n == DEFAULT_DOWNLOAD_NAME || n == "get-svg")
             .unwrap_or(false))
     .then_some(settings.download_dir.clone());
 
     let mut binaries = Vec::new();
     if let Some(exe) = exe {
         if let Some(dir) = exe.parent() {
-            for name in ["get-svg", "getsvg"] {
+            for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
                 let path = dir.join(format!("{name}{ext}"));
                 if path.exists() {
                     binaries.push(path);
@@ -92,25 +92,25 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
     let plan = collect_plan(&settings);
 
     if plan.targets().is_empty() {
-        println!("Nothing to remove — GET SVG already leaves no trace on this system.");
+        println!("Nothing to remove — svgfetch already leaves no trace on this system.");
         return Ok(0);
     }
 
-    println!("✗ GET SVG uninstall");
+    println!("✗ svgfetch uninstall");
     println!();
     if let Some(p) = &plan.config_dir {
         print_target("\u{2022} config", p, "settings, cache, recent searches");
     }
     if let Some(p) = &plan.download_dir {
-        print_target("\u{2022} downloads", p, "SVGs downloaded by get-svg");
+        print_target("\u{2022} downloads", p, "SVGs downloaded by svgfetch");
     }
     for b in &plan.binaries {
-        print_target("\u{2022} binary", b, "get-svg / getsvg");
+        print_target("\u{2022} binary", b, "svgfetch");
     }
     if plan.download_dir.is_none() && settings.download_dir.exists() {
         println!();
         println!(
-            "  \u{23fa} custom download directory left untouched (not named \"get-svg\"):\n     {}",
+            "  \u{23fa} custom download directory left untouched (not named \"svgfetch\"):\n     {}",
             settings.download_dir.display()
         );
         println!("     Delete it manually if you also want those files removed.");
@@ -170,10 +170,10 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
     }
 
     println!();
-    println!("✓ GET SVG has been completely removed from this system.");
+    println!("✓ svgfetch has been completely removed from this system.");
     println!("  Reinstall anytime with:");
     println!(
-        "    curl -fsSL https://raw.githubusercontent.com/avdeshjadon/get-svg/main/install.sh | sh"
+        "    curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
     );
     Ok(0)
 }

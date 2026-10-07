@@ -1184,41 +1184,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "get-svg"
-version = "0.2.3"
-dependencies = [
- "chrono",
- "clap",
- "criterion",
- "crossterm",
- "dirs",
- "flate2",
- "futures",
- "httpmock",
- "image",
- "indicatif",
- "libc",
- "proptest",
- "ratatui",
- "regex",
- "reqwest",
- "resvg",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-util",
- "toml",
- "tracing",
- "tracing-subscriber",
- "url",
- "zip",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2966,6 +2931,41 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "svgfetch"
+version = "0.2.3"
+dependencies = [
+ "chrono",
+ "clap",
+ "criterion",
+ "crossterm",
+ "dirs",
+ "flate2",
+ "futures",
+ "httpmock",
+ "image",
+ "indicatif",
+ "libc",
+ "proptest",
+ "ratatui",
+ "regex",
+ "reqwest",
+ "resvg",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "zip",
+]
 
 [[package]]
 name = "svgtypes"

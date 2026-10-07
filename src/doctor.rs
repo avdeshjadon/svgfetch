@@ -55,7 +55,7 @@ pub async fn run(settings: &Settings) -> Result<Report> {
                 "{} (not found; using defaults)",
                 settings.config_path.display()
             ),
-            Some("Run `get-svg config --init` to create a config file.".into()),
+            Some("Run `svgfetch config --init` to create a config file.".into()),
         )
     };
     checks.push(Check {
@@ -238,7 +238,7 @@ async fn check_network(settings: &Settings) -> (Status, String, Option<String>) 
 /// Render the report as a human-readable block.
 pub fn render(report: &Report) -> String {
     let mut out = String::new();
-    out.push_str("GET SVG doctor\n");
+    out.push_str("svgfetch doctor\n");
     out.push_str(&"=".repeat(60));
     out.push('\n');
     for check in &report.checks {

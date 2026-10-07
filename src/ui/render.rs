@@ -211,7 +211,7 @@ fn draw_too_small(f: &mut Frame, area: Rect) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" columns×rows to use GET SVG."),
+        Span::raw(" columns×rows to use svgfetch."),
     ])))
     .block(block)
     .alignment(Alignment::Center)

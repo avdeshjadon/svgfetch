@@ -74,7 +74,7 @@ pub struct Manifest {
 
 const MANIFEST_NOTE: &str = "Files are unmodified originals from Wikimedia Commons. \
 License information is per-file and was recorded at download time; verify it on the \
-source page before reuse. GET SVG does not own or license any Wikimedia content.";
+source page before reuse. svgfetch does not own or license any Wikimedia content.";
 
 impl AttributionEntry {
     pub fn for_asset(asset: &Asset) -> AttributionEntry {
@@ -135,7 +135,7 @@ pub fn metadata_documents(query: &str, assets: &[Asset]) -> Vec<(String, String)
     let licenses: Vec<LicenseEntry> = assets.iter().map(license_entry).collect();
     let sources: Vec<SourceEntry> = assets.iter().map(source_entry).collect();
     let manifest = Manifest {
-        tool: "GET SVG".to_string(),
+        tool: "svgfetch".to_string(),
         version: crate::VERSION.to_string(),
         query: query.to_string(),
         created_at: Utc::now().to_rfc3339(),

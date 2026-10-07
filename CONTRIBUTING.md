@@ -1,4 +1,4 @@
-# Contributing to GET SVG
+# Contributing to svgfetch
 
 Thanks for wanting to help. This file covers how issues, patches, and behavior
 are handled. Please also read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
@@ -18,8 +18,8 @@ are handled. Please also read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 ## Development environment
 
 ```sh
-git clone https://github.com/avdeshjadon/get-svg.git
-cd get-svg
+git clone https://github.com/avdeshjadon/svgfetch.git
+cd svgfetch
 cargo build
 cargo test --all
 ```
@@ -47,7 +47,7 @@ Tests must be deterministic and offline:
 
 Open an issue with:
 
-1. Operating system and `get-svg --version`.
+1. Operating system and `svgfetch --version`.
 2. The exact command (or steps in the TUI) that triggered the problem.
 3. Expected vs. actual behavior.
 4. If it involves a specific file, a *safe* example — never a live upload URL

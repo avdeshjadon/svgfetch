@@ -1,5 +1,5 @@
 {
-  "name": "@avdeshjadon/get-svg",
+  "name": "svgfetch",
   "version": "0.2.3",
   "publishConfig": {
     "access": "public"
@@ -7,6 +7,8 @@
   "description": "Discover, inspect, and download SVG assets from Wikimedia Commons from your terminal.",
   "main": "bin/run.js",
   "bin": {
+    "svgfetch": "bin/run.js",
+    "svg-fetch": "bin/run.js",
     "getsvg": "bin/run.js",
     "get-svg": "bin/run.js"
   },
@@ -15,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/avdeshjadon/get-svg.git"
+    "url": "git+https://github.com/avdeshjadon/svgfetch.git"
   },
   "keywords": [
     "svg",
@@ -32,9 +34,9 @@
   "author": "Avdesh Jadon <theavdeshjadon@gmail.com>",
   "license": "MIT OR Apache-2.0",
   "bugs": {
-    "url": "https://github.com/avdeshjadon/get-svg/issues"
+    "url": "https://github.com/avdeshjadon/svgfetch/issues"
   },
-  "homepage": "https://github.com/avdeshjadon/get-svg#readme",
+  "homepage": "https://github.com/avdeshjadon/svgfetch#readme",
   "files": [
     "bin",
     "README.md",

@@ -18,9 +18,9 @@ pub fn run() -> Result<i32> {
             "Interactive search requires a terminal (stdout is not a TTY).\n\n\
 Type a keyword (e.g. Amazon) and press Enter to search and download SVGs.\n\n\
 For scripting, use commands like:\n  \
-get-svg search amazon\n  \
-get-svg search amazon --zip out.zip\n  \
-get-svg --help"
+svgfetch search amazon\n  \
+svgfetch search amazon --zip out.zip\n  \
+svgfetch --help"
                 .to_string(),
         ));
     }

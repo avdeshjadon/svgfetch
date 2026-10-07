@@ -261,7 +261,7 @@ fn pack_zip(
 }
 
 const README_TEXT: &str =
-    "This archive was created by GET SVG (https://github.com/avdeshjadon/get-svg)\n\n\
+    "This archive was created by svgfetch (https://github.com/avdeshjadon/svgfetch)\n\n\
 Contents:\n\
   svg/       Original SVG files, unmodified, as served by Wikimedia Commons\n\
   metadata/  Attribution, license, and source records captured at download time\n\n\
@@ -270,7 +270,7 @@ Each file carries its own license. Read metadata/attribution.json and\n\
 metadata/licenses.json — do not assume a shared license across files.\n\
 License data may be incomplete when the source page did not expose it;\n\
 verify on the Wikimedia Commons page linked in metadata/sources.json.\n\n\
-GET SVG is an independent tool and does not own or license any content.\n";
+svgfetch is an independent tool and does not own or license any content.\n";
 
 /// Streaming download of many files into a ZIP is impractical without a
 /// seekable writer; we stream each file to disk (never RAM) instead.

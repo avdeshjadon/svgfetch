@@ -1032,7 +1032,7 @@ fn zip_stem(query: &str) -> String {
         .collect::<Vec<_>>()
         .join("-");
     if cleaned.is_empty() {
-        "get-svg".to_string()
+        "svgfetch".to_string()
     } else {
         format!("{cleaned}-svg")
     }
@@ -1065,7 +1065,7 @@ mod tests {
         assert!(!s.contains('/'));
         assert!(!s.contains('!'));
         assert!(s.ends_with("-svg"));
-        assert_eq!(zip_stem(""), "get-svg");
+        assert_eq!(zip_stem(""), "svgfetch");
     }
 
     #[test]

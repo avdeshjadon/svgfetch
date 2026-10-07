@@ -1,8 +1,7 @@
-//! GET SVG binary entry point.
+//! svgfetch binary entry point.
 
 #[tokio::main]
 async fn main() {
-    // clap parses/prints help and exits inside `get_svg::run`.
-    let code = get_svg::run().await;
+    let code = svgfetch::run().await;
     std::process::exit(code);
 }

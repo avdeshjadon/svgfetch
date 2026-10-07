@@ -1,6 +1,6 @@
 # Security Policy
 
-GET SVG downloads files from the internet and renders untrusted text in a
+svgfetch downloads files from the internet and renders untrusted text in a
 terminal, so a meaningful chunk of the crate exists purely to contain hostile
 input. This policy describes how vulnerabilities are handled and what the
 security boundaries are.
@@ -14,7 +14,7 @@ and the maintainer can produce a point release promptly.
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Email `theavdeshjadon@gmail.com` or open a
-[GitHub security advisory](https://github.com/avdeshjadon/get-svg/security/advisories/new)
+[GitHub security advisory](https://github.com/avdeshjadon/svgfetch/security/advisories/new)
 (privately). Include:
 
 - The affected version(s).

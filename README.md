@@ -1,12 +1,12 @@
-# GET SVG
+# svgfetch
 
-**GET SVG** is a terminal-first client for discovering, inspecting, and downloading SVG
+**svgfetch** is a terminal-first client for discovering, inspecting, and downloading SVG
 assets from [Wikimedia Commons](https://commons.wikimedia.org). It ships both a
 fast, keyboard-driven terminal interface and a scriptable CLI that speaks `table`, `JSON`,
 and JSON-lines — with downloads, ZIP packing, per-file attribution metadata, caching,
 and a rate limiter that stays polite toward Wikimedia's shared infrastructure.
 
-> `GET SVG — Discover. Download. Ship SVGs.`
+> `svgfetch — Discover. Download. Ship SVGs.`
 
 ## Features
 
@@ -21,7 +21,7 @@ and a rate limiter that stays polite toward Wikimedia's shared infrastructure.
 - **ZIP packing** — one archive per query with an included `ATTRIBUTION.md`.
 - **Attribution metadata** — a `metadata/` folder with per-file license and credit
   records, so exporting art stays legally clean.
-- **On-disk cache** — search results cached with TTL + size budget; `get-svg cache status|clear`.
+- **On-disk cache** — search results cached with TTL + size budget; `svgfetch cache status|clear`.
 - **Safety first** — path-traversal-proof filenames, HTTPS-only, response-size ceilings,
   429/retry backoff, and terminal escape stripping.
 
@@ -32,38 +32,37 @@ and a rate limiter that stays polite toward Wikimedia's shared infrastructure.
 Run instantly without installing:
 
 ```sh
-npx @avdeshjadon/get-svg
+npx svgfetch
 ```
 
 Or install globally via npm:
 
 ```sh
-npm install -g @avdeshjadon/get-svg
+npm install -g svgfetch
 ```
 
 ### Pre-built binaries (recommended)
 
-One-line installers fetch the [latest GitHub release](https://github.com/avdeshjadon/get-svg/releases)
+One-line installers fetch the [latest GitHub release](https://github.com/avdeshjadon/svgfetch/releases)
 for your OS + CPU and verify its SHA-256 checksum before installing to
 `~/.local/bin`:
 
 ```sh
 # macOS / Linux / Windows Git Bash / MSYS
-curl -fsSL https://raw.githubusercontent.com/avdeshjadon/get-svg/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh
 ```
 
 ```powershell
 # Windows PowerShell (native)
 Set-ExecutionPolicy -Scope Process Bypass
-irm https://raw.githubusercontent.com/avdeshjadon/get-svg/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.ps1 | iex
 ```
 
 - The latest release is resolved automatically — no version to remember. To pin
-  one anyway, set `GET_SVG_VERSION=v0.1.0` (or `$env:GET_SVG_VERSION`).
-- The installer puts **both** the `get-svg` binary and a `getsvg` shortcut into
-  `~/.local/bin`. After it finishes (and you add the printed directory to your
-  `PATH`) just type `getsvg` to launch the interactive interface, or
-  `getsvg --help` for the full command list.
+  one anyway, set `SVGFETCH_VERSION=v0.2.3` (or `$env:SVGFETCH_VERSION`).
+- The installer puts `svgfetch` (and aliases) into `~/.local/bin`. After it finishes
+  (and you add the printed directory to your `PATH`) just type `svgfetch` to launch
+  the interactive interface, or `svgfetch --help` for the full command list.
 - Linux builds target the GNU C library (glibc ≥ 2.31, e.g. Ubuntu 20.04+,
   Debian 11+). macOS binaries are unsigned — install via the command line
   (curl) to avoid Gatekeeper prompts.
@@ -72,14 +71,14 @@ irm https://raw.githubusercontent.com/avdeshjadon/get-svg/main/install.ps1 | iex
 ### From source
 
 ```sh
-cargo install get-svg --locked
+cargo install svgfetch --locked
 ```
 
-This installs both the `get-svg` binary and a `getsvg` alias. Or build from source:
+Or build from source:
 
 ```sh
-git clone https://github.com/avdeshjadon/get-svg.git
-cd get-svg
+git clone https://github.com/avdeshjadon/svgfetch.git
+cd svgfetch
 cargo build --release
 ```
 
@@ -88,53 +87,51 @@ cargo build --release
 Launch the interactive interface (requires a real TTY):
 
 ```sh
-get-svg
+svgfetch
 ```
 
 Non-interactive search:
 
 ```sh
-get-svg search "github logo"
-get-svg search "logos" --limit 50 --format json
-get-svg category "Logos" --limit 100 --download ./logos
+svgfetch search "github logo"
+svgfetch search "logos" --limit 50 --format json
+svgfetch category "Logos" --limit 100 --download ./logos
 ```
 
 Download one file and its metadata:
 
 ```sh
-get-svg download "File:GitHub_Logo.svg" -o ./assets
+svgfetch download "File:GitHub_Logo.svg" -o ./assets
 ```
 
 Search + download + zip + write attribution in one step:
 
 ```sh
-get-svg batch "minimalism" --zip repo-svg.zip --metadata ./attribution -y
+svgfetch batch "minimalism" --zip repo-svg.zip --metadata ./attribution -y
 ```
 
 Inspect and maintain the cache:
 
 ```sh
-get-svg cache status
-get-svg cache clear
+svgfetch cache status
+svgfetch cache clear
 ```
 
 Self-diagnose environment, network, and config:
 
 ```sh
-get-svg doctor
+svgfetch doctor
 ```
 
-Update to the latest release (downloads the matching binary, verifies its
-SHA-256, swaps `get-svg`/`getsvg` in place, and removes old binaries and
-leftover `.old` files):
+Update to the latest release:
 
 ```sh
-getsvg update
+svgfetch update
 ```
 
 ## Command reference
 
-Run `get-svg <command> --help` for the authoritative flag list. Overview:
+Run `svgfetch <command> --help` for the authoritative flag list. Overview:
 
 | Command      | Purpose                                            |
 | ------------ | -------------------------------------------------- |
@@ -147,7 +144,7 @@ Run `get-svg <command> --help` for the authoritative flag list. Overview:
 | `doctor`     | Environment/network/config diagnostics (`--json`). |
 | `version`    | Print version info.                                |
 | `update`     | Download + install the latest release in place.    |
-| `dlt`        | Completely remove GET SVG (config, cache, downloads, binaries). |
+| `dlt`        | Completely remove svgfetch (config, cache, downloads, binaries). |
 
 Interactive keyboard map (built into the footer hints):
 
@@ -160,33 +157,32 @@ Interactive keyboard map (built into the footer hints):
 | `q` / `Ctrl+C` | Quit |
 
 Uninstall completely — deletes config, cache, recent searches, the default
-`~/Downloads/get-svg` folder, and the `get-svg`/`getsvg` binaries themselves
-(leaves a custom download directory untouched unless it is named `get-svg`):
+`~/Downloads/svgfetch` folder, and the binaries themselves:
 
 ```sh
-getsvg dlt          # asks for confirmation
-getsvg dlt --yes    # non-interactive
+svgfetch dlt          # asks for confirmation
+svgfetch dlt --yes    # non-interactive
 ```
 
 ## Configuration
 
-`get-svg` reads TOML from your platform config dir:
+`svgfetch` reads TOML from your platform config dir:
 
-- Linux: `~/.config/get-svg/config.toml`
-- macOS: `~/Library/Application Support/get-svg/config.toml`
-- Windows: `%APPDATA%\get-svg\config.toml`
+- Linux: `~/.config/svgfetch/config.toml`
+- macOS: `~/Library/Application Support/svgfetch/config.toml`
+- Windows: `%APPDATA%\svgfetch\config.toml`
 
 Generate a file with all defaults:
 
 ```sh
-get-svg config --init
+svgfetch config --init
 ```
 
-`config --init` prints the current effective config; `get-svg config` (no flag) is
+`config --init` prints the current effective config; `svgfetch config` (no flag) is
 read-only. Available keys:
 
 ```toml
-download_directory = "~/Downloads/get-svg"
+download_directory = "~/Downloads/svgfetch"
 max_concurrency = 4          # parallel downloads (1-32)
 cache_enabled = true
 cache_ttl_hours = 24
@@ -199,12 +195,12 @@ contact = "your@email"         # appended to the User-Agent (recommended for hea
 ```
 
 The default User-Agent follows [Wikimedia policy](https://meta.wikimedia.org/wiki/User-Agent_policy):
-`GET-SVG/<version> (<repository>; <contact>)`. Setting `contact` is recommended if you
+`svgfetch/<version> (<repository>; <contact>)`. Setting `contact` is recommended if you
 run heavy automation so Wikimedia can reach you.
 
 ## License, attribution, and Wikimedia etiquette
 
-- Files on Wikimedia Commons carry their **own** licenses. GET SVG never invents one:
+- Files on Wikimedia Commons carry their **own** licenses. svgfetch never invents one:
   per-file license/credit info is written next to downloaded files (`metadata/`),
   and unknown licenses are reported as `Unknown` rather than guessed.
 - The client enforces a conservative request rate, responds to `429 Retry-After`, and

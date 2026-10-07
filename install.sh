@@ -1,28 +1,28 @@
 #!/bin/sh
 #
-# get-svg — one-line installer (POSIX sh: macOS, Linux, Windows Git Bash).
+# svgfetch — one-line installer (POSIX sh: macOS, Linux, Windows Git Bash).
 #
 #   macOS / Linux / Windows-Git-Bash:
-#     curl -fsSL https://raw.githubusercontent.com/avdeshjadon/get-svg/main/install.sh | sh
+#     curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh
 #
 #   Install somewhere else:
 #     curl -fsSL .../install.sh | sh -s -- --dir "$HOME/bin"
 #
 # Always installs the latest release automatically (or pin with
-# GET_SVG_VERSION, e.g. GET_SVG_VERSION=v0.1.0). Both `get-svg` and the
-# `getsvg` alias are installed to ~/.local/bin (or --dir), SHA-256 verified.
+# SVGFETCH_VERSION, e.g. SVGFETCH_VERSION=v0.2.3). Both `svgfetch` and aliases
+# are installed to ~/.local/bin (or --dir), SHA-256 verified.
 set -eu
 
-REPO="avdeshjadon/get-svg"
-BIN="get-svg"
-VERSION="${GET_SVG_VERSION:-latest}"
+REPO="avdeshjadon/svgfetch"
+BIN="svgfetch"
+VERSION="${SVGFETCH_VERSION:-${GET_SVG_VERSION:-latest}}"
 
 DIR="${INSTALL_DIR:-}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dir) DIR="$2"; shift 2 ;;
     --dir=*) DIR="${1#*=}"; shift ;;
-    -h|--help) echo "usage: install.sh [--dir DIR]  (or set INSTALL_DIR / GET_SVG_VERSION)"; exit 0 ;;
+    -h|--help) echo "usage: install.sh [--dir DIR]  (or set INSTALL_DIR / SVGFETCH_VERSION)"; exit 0 ;;
     *) echo "install.sh: unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -78,11 +78,16 @@ fi
 BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
 ARTIFACT="$BIN-$TARGET.$EXT"
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/get-svg.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/svgfetch.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
 echo "> downloading $ARTIFACT ($VERSION) ..." >&2
-curl -fsSL -o "$TMP/$ARTIFACT" "$BASE_URL/$ARTIFACT"
+if ! curl -fsSL -o "$TMP/$ARTIFACT" "$BASE_URL/$ARTIFACT"; then
+  # Fallback to legacy artifact name if downloading older release
+  ARTIFACT="get-svg-$TARGET.$EXT"
+  curl -fsSL -o "$TMP/$ARTIFACT" "$BASE_URL/$ARTIFACT"
+fi
+
 curl -fsSL -o "$TMP/$ARTIFACT.sha256" "$BASE_URL/$ARTIFACT.sha256"
 
 # --- verify SHA-256 --------------------------------------------------------
@@ -116,9 +121,14 @@ fi
 
 # --- install ---------------------------------------------------------------
 mkdir -p "$DIR"
-for NAME in "$BIN" "getsvg"; do
+PRIMARY_BINPATH="$(find "$EXTRACTED" -type f -name "svgfetch" -o -type f -name "svgfetch.exe" -o -type f -name "get-svg" -o -type f -name "getsvg" 2>/dev/null | sed -n '1p')"
+[ -n "$PRIMARY_BINPATH" ] || { echo "error: archive did not contain an executable binary" >&2; exit 1; }
+
+for NAME in "$BIN" "svg-fetch" "get-svg" "getsvg"; do
   BINPATH="$(find "$EXTRACTED" -type f -name "$NAME" -o -type f -name "$NAME.exe" 2>/dev/null | sed -n '1p')"
-  [ -n "$BINPATH" ] || { echo "error: archive did not contain a $NAME binary" >&2; exit 1; }
+  if [ -z "$BINPATH" ]; then
+    BINPATH="$PRIMARY_BINPATH"
+  fi
   install -m 755 "$BINPATH" "$DIR/$NAME"
   echo "> installed $DIR/$NAME ($VERSION)" >&2
 done
@@ -132,5 +142,5 @@ case ":$PATH:" in
   *) echo "> add $DIR to your PATH, e.g.: export PATH=\"$DIR:\$PATH\"" >&2 ;;
 esac
 
-echo "> done. Try:  getsvg --help   or just:  getsvg"
+echo "> done. Try:  svgfetch --help   or just:  svgfetch"
 echo "$DIR"

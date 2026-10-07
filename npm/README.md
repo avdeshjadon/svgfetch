@@ -1,32 +1,32 @@
-# getsvg
+# svgfetch
 
 > Discover, inspect, and download SVG assets from Wikimedia Commons right from your terminal.
 
 ## Quick Start
 
-You can run `get-svg` immediately without installing:
+You can run `svgfetch` immediately without installing:
 
 ```bash
-npx @avdeshjadon/get-svg
+npx svgfetch
 ```
 
 Or install globally:
 
 ```bash
-npm install -g @avdeshjadon/get-svg
+npm install -g svgfetch
 ```
 
-After installing, both `getsvg` and `get-svg` commands are available:
+After installing, `svgfetch` (and aliases `svg-fetch`, `get-svg`, `getsvg`) are available:
 
 ```bash
 # Launch interactive search
-getsvg
+svgfetch
 
 # Search directly
-getsvg search "Amazon"
+svgfetch search "Amazon"
 
 # Download SVG files directly
-getsvg download "File:Amazon logo.svg"
+svgfetch download "File:Amazon logo.svg"
 ```
 
 ## Features
@@ -39,7 +39,7 @@ getsvg download "File:Amazon logo.svg"
 ## Repository & Documentation
 
 For full documentation, CLI commands, and flags, visit the GitHub repository:
-[https://github.com/avdeshjadon/get-svg](https://github.com/avdeshjadon/get-svg)
+[https://github.com/avdeshjadon/svgfetch](https://github.com/avdeshjadon/svgfetch)
 
 ## License
 

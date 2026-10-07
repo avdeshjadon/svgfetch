@@ -75,22 +75,27 @@ impl Default for Settings {
     }
 }
 
-/// `~/.config/get-svg` on Linux and `$XDG_CONFIG_HOME`; the platform config
+/// `~/.config/svgfetch` on Linux and `$XDG_CONFIG_HOME`; the platform config
 /// directory elsewhere (e.g. `~/Library/Application Support` on macOS).
 pub fn config_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("get-svg")
+    let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let new_dir = base.join("svgfetch");
+    let old_dir = base.join("get-svg");
+    if !new_dir.exists() && old_dir.exists() {
+        old_dir
+    } else {
+        new_dir
+    }
 }
 
-/// Default download directory: `~/Downloads/get-svg`.
+/// Default download directory: `~/Downloads/svgfetch`.
 pub fn default_download_dir() -> PathBuf {
     match dirs::download_dir() {
-        Some(dir) => dir.join("get-svg"),
+        Some(dir) => dir.join("svgfetch"),
         None => dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("Downloads")
-            .join("get-svg"),
+            .join("svgfetch"),
     }
 }
 
@@ -185,7 +190,7 @@ impl Settings {
             .contact
             .clone()
             .unwrap_or_else(|| format!("{repo}; contact via repository issue tracker"));
-        format!("GET-SVG/{version} ({repo}; {contact})")
+        format!("svgfetch/{version} ({repo}; {contact})")
     }
 
     /// The cache directory, created on demand.
@@ -269,10 +274,10 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.max_concurrency, 4);
         assert!(s.cache_enabled);
-        assert!(s.user_agent().starts_with("GET-SVG/"));
+        assert!(s.user_agent().starts_with("svgfetch/"));
         assert!(s
             .user_agent()
-            .contains("https://github.com/avdeshjadon/get-svg"));
+            .contains("https://github.com/avdeshjadon/svgfetch"));
     }
 
     #[test]

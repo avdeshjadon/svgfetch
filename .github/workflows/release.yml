@@ -56,9 +56,11 @@ jobs:
           ARCHIVE: ${{ matrix.archive }}
         run: |
           set -euo pipefail
-          PREFIX="get-svg-$TARGET"
-          ARTIFACT="get-svg-$TARGET.$ARCHIVE"
+          PREFIX="svgfetch-$TARGET"
+          ARTIFACT="svgfetch-$TARGET.$ARCHIVE"
           mkdir -p "dist/$PREFIX"
+          cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/"
+          cp "target/$TARGET/release/svg-fetch$EXT" "dist/$PREFIX/"
           cp "target/$TARGET/release/get-svg$EXT" "dist/$PREFIX/"
           cp "target/$TARGET/release/getsvg$EXT" "dist/$PREFIX/"
           cp README.md LICENSE-MIT LICENSE-APACHE "dist/$PREFIX/"
@@ -72,7 +74,7 @@ jobs:
       - name: Upload binary checksum
         shell: bash
         env:
-          ARTIFACT: get-svg-${{ matrix.target }}.${{ matrix.archive }}
+          ARTIFACT: svgfetch-${{ matrix.target }}.${{ matrix.archive }}
         run: |
           set -euo pipefail
           cd dist
@@ -87,6 +89,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/get-svg-${{ matrix.target }}.${{ matrix.archive }}
-            dist/get-svg-${{ matrix.target }}.${{ matrix.archive }}.sha256
+            dist/svgfetch-${{ matrix.target }}.${{ matrix.archive }}
+            dist/svgfetch-${{ matrix.target }}.${{ matrix.archive }}.sha256
           generate_release_notes: true

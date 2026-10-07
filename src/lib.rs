@@ -1,6 +1,6 @@
-//! GET SVG — discover, inspect, and download SVG assets from Wikimedia Commons.
+//! svgfetch — discover, inspect, and download SVG assets from Wikimedia Commons.
 //!
-//! This crate is the library half of the `get-svg` CLI. Everything the
+//! This crate is the library half of the `svgfetch` CLI. Everything the
 //! binaries do lives here so it can be tested in-process.
 
 // `async fn` in a public trait keeps the provider abstraction ergonomic; the
@@ -31,7 +31,7 @@ pub mod update;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Product name shown in branding and the terminal UI.
-pub const APP_NAME: &str = "GET SVG";
+pub const APP_NAME: &str = "svgfetch";
 
 /// Tagline used in branding and help output.
 pub const TAGLINE: &str = "Discover. Download. Ship SVGs.";

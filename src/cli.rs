@@ -2,15 +2,15 @@
 
 use clap::{Parser, Subcommand};
 
-/// GET SVG — discover, inspect, and download SVG assets from Wikimedia Commons.
+/// svgfetch — discover, inspect, and download SVG assets from Wikimedia Commons.
 #[derive(Debug, Parser)]
 #[command(
-    name = "get-svg",
-    bin_name = "get-svg",
+    name = "svgfetch",
+    bin_name = "svgfetch",
     version,
-    about = "GET SVG — Discover. Download. Ship SVGs.",
-    long_about = "GET SVG is a terminal-first client for discovering, inspecting, and \
-downloading SVG assets from Wikimedia Commons.\n\nRun `get-svg` with no arguments to \
+    about = "svgfetch — Discover. Download. Ship SVGs.",
+    long_about = "svgfetch is a terminal-first client for discovering, inspecting, and \
+downloading SVG assets from Wikimedia Commons.\n\nRun `svgfetch` with no arguments to \
 launch the interactive interface.",
     propagate_version = true
 )]
@@ -34,7 +34,7 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    /// Direct brand/logo to download (e.g. `getsvg amazon`, `getsvg "amazon prime"`).
+    /// Direct brand/logo to download (e.g. `svgfetch amazon`, `svgfetch "amazon prime"`).
     /// If omitted, launches the interactive terminal UI.
     #[arg(num_args = 1..)]
     pub brand: Vec<String>,
@@ -187,12 +187,12 @@ pub enum Command {
     /// Print version information.
     Version,
 
-    /// Completely remove GET SVG from this system.
+    /// Completely remove svgfetch from this system.
     ///
     /// Deletes the config (settings, cache, recent searches), the default
-    /// `get-svg` download folder, and the installed `get-svg`/`getsvg`
+    /// `svgfetch` download folder, and the installed `svgfetch`
     /// binaries — leaving no trace. A custom download directory is left
-    /// untouched unless its name is `get-svg`.
+    /// untouched unless its name is `svgfetch`.
     Dlt {
         /// Skip the confirmation prompt.
         #[arg(long, short = 'y')]
@@ -201,9 +201,9 @@ pub enum Command {
 
     /// Download and install the latest release, replacing this binary.
     ///
-    /// Verifies the download with SHA-256, swaps `get-svg`/`getsvg` in place,
+    /// Verifies the download with SHA-256, swaps `svgfetch` in place,
     /// and removes old binaries and leftover `.old` files. Uses the GitHub
-    /// releases API pointed at this project unless `GET_SVG_UPDATE_REPO` is set.
+    /// releases API pointed at this project unless `SVGFETCH_UPDATE_REPO` is set.
     Update,
 }
 
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn parses_search() {
         let cli = Cli::parse_from([
-            "get-svg", "search", "github", "--limit", "10", "--format", "json",
+            "svgfetch", "search", "github", "--limit", "10", "--format", "json",
         ]);
         match cli.command {
             Some(Command::Search {
@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn parses_download_with_output() {
-        let cli = Cli::parse_from(["get-svg", "download", "File:GitHub_Logo.svg", "-o", "/tmp"]);
+        let cli = Cli::parse_from(["svgfetch", "download", "File:GitHub_Logo.svg", "-o", "/tmp"]);
         match cli.command {
             Some(Command::Download { file, output, .. }) => {
                 assert_eq!(file, "File:GitHub_Logo.svg");

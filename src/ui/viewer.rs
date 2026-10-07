@@ -16,7 +16,7 @@ pub fn generate_viewer_html(_title: &str, svg_content: &str) -> String {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GET SVG</title>
+<title>svgfetch</title>
 <style>
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   :root {{
@@ -178,7 +178,7 @@ pub fn open_vector_window(title: &str, svg_bytes: &[u8]) -> std::io::Result<Path
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
-    let temp_file = std::env::temp_dir().join(format!("getsvg_view_{}.html", sanitized));
+    let temp_file = std::env::temp_dir().join(format!("svgfetch_view_{}.html", sanitized));
     std::fs::write(&temp_file, html)?;
 
     launch_app_window(&temp_file);

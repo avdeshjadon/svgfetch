@@ -180,7 +180,7 @@ pub async fn cmd_direct_brand(
             }
             None => {
                 eprintln!("\x1b[1;31m\u{2717} No SVG logo found for \"{}\".\x1b[0m", query_trim);
-                eprintln!("Tip: Run `getsvg` with no arguments to search interactively.");
+                eprintln!("Tip: Run `svgfetch` with no arguments to search interactively.");
                 return Ok(1);
             }
         }
@@ -263,7 +263,7 @@ pub async fn cmd_direct_brand(
 
     if !is_curated {
         eprintln!(
-            "\x1b[2m💡 Tip: Want to verify this brand? Contribute to brands.json at https://github.com/avdeshjadon/get-svg\x1b[0m"
+            "\x1b[2m💡 Tip: Want to verify this brand? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch\x1b[0m"
         );
     }
 
@@ -454,7 +454,7 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
             eprintln!("\u{2192} Saved to {}", dest.display());
         } else {
             eprintln!(
-                "\nTip: re-run with `get-svg search \"{}\" --download DIR`, or `--zip FILE`.",
+                "\nTip: re-run with `svgfetch search \"{}\" --download DIR`, or `--zip FILE`.",
                 args.query.trim()
             );
         }
@@ -650,7 +650,7 @@ fn cmd_config(init: bool) -> Result<i32> {
     println!("# {}", crate::APP_NAME);
     println!("# Config file: {}", settings.config_path.display());
     if !settings.config_path.exists() {
-        println!("# (file does not exist yet; run `get-svg config --init` to create it)");
+        println!("# (file does not exist yet; run `svgfetch config --init` to create it)");
     }
     println!();
     print!("{}", settings.to_toml_string());
@@ -874,7 +874,7 @@ fn zip_stem(query: &str) -> String {
         .collect::<Vec<_>>()
         .join("-");
     if cleaned.is_empty() {
-        "get-svg".to_string()
+        "svgfetch".to_string()
     } else {
         format!("{cleaned}-svg")
     }
@@ -901,7 +901,7 @@ mod tests {
         assert!(!s.contains('/'));
         assert!(!s.contains('!'));
         assert!(s.ends_with("-svg"));
-        assert_eq!(zip_stem(""), "get-svg");
+        assert_eq!(zip_stem(""), "svgfetch");
     }
 
     #[test]

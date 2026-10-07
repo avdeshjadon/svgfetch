@@ -1,6 +1,6 @@
 //! Property-based tests for the security-critical filename/text paths.
 
-use get_svg::security::{
+use svgfetch::security::{
     has_control_chars, safe_join, sanitize_filename, sanitize_text, validate_https_url,
 };
 use proptest::prelude::*;
@@ -15,7 +15,7 @@ fn sanitize_is_idempotent_across_truncation() {
     let once = sanitize_filename(input);
     let twice = sanitize_filename(&once);
     assert_eq!(once, twice);
-    assert!(once.len() <= get_svg::security::MAX_FILENAME_BYTES);
+    assert!(once.len() <= svgfetch::security::MAX_FILENAME_BYTES);
 }
 
 proptest! {
@@ -34,7 +34,7 @@ proptest! {
         prop_assert!(!out.contains('/'));
         prop_assert!(!out.contains('\\'));
         prop_assert!(!has_control_chars(&out));
-        prop_assert!(out.len() <= get_svg::security::MAX_FILENAME_BYTES);
+        prop_assert!(out.len() <= svgfetch::security::MAX_FILENAME_BYTES);
     }
 
     /// Joins always stay inside the base directory.

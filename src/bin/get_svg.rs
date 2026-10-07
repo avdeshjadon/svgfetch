@@ -1,4 +1,4 @@
-//! Legacy alias binary: `getsvg` behaves exactly like `svgfetch`.
+//! Legacy alias binary: `get-svg` behaves exactly like `svgfetch`.
 
 #[tokio::main]
 async fn main() {

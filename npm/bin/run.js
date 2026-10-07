@@ -9,8 +9,8 @@ const { getTarget, install } = require('./install');
 async function main() {
   const info = getTarget();
   if (!info) {
-    console.error(`[getsvg] Error: Unsupported platform/architecture: ${os.platform()} ${os.arch()}`);
-    console.error(`[getsvg] Supported: macOS (Apple Silicon/Intel), Linux (x64), Windows (x64)`);
+    console.error(`[svgfetch] Error: Unsupported platform/architecture: ${os.platform()} ${os.arch()}`);
+    console.error(`[svgfetch] Supported: macOS (Apple Silicon/Intel), Linux (x64), Windows (x64)`);
     process.exit(1);
   }
 
@@ -20,13 +20,13 @@ async function main() {
     try {
       await install();
     } catch (err) {
-      console.error(`[getsvg] Error installing binary:`, err.message);
+      console.error(`[svgfetch] Error installing binary:`, err.message);
       process.exit(1);
     }
   }
 
   if (!fs.existsSync(binaryPath)) {
-    console.error(`[getsvg] Binary not found at ${binaryPath}`);
+    console.error(`[svgfetch] Binary not found at ${binaryPath}`);
     process.exit(1);
   }
 
@@ -36,7 +36,7 @@ async function main() {
   });
 
   child.on('error', (err) => {
-    console.error(`[getsvg] Execution error:`, err);
+    console.error(`[svgfetch] Execution error:`, err);
     process.exit(1);
   });
 
@@ -50,6 +50,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`[getsvg] Fatal:`, err);
+  console.error(`[svgfetch] Fatal:`, err);
   process.exit(1);
 });

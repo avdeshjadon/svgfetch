@@ -60,7 +60,7 @@ pub fn write_assets(
     match format {
         OutputFormat::Json => {
             let envelope = JsonEnvelope {
-                tool: "GET SVG",
+                tool: "svgfetch",
                 version: crate::VERSION,
                 query,
                 total_hits,
