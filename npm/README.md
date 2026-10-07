@@ -4,16 +4,16 @@
 
 ## Quick Start
 
-You can run `getsvg` immediately without installing:
+You can run `get-svg` immediately without installing:
 
 ```bash
-npx getsvg
+npx @avdeshjadon/get-svg
 ```
 
 Or install globally:
 
 ```bash
-npm install -g getsvg
+npm install -g @avdeshjadon/get-svg
 ```
 
 After installing, both `getsvg` and `get-svg` commands are available:

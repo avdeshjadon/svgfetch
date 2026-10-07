@@ -32,13 +32,13 @@ and a rate limiter that stays polite toward Wikimedia's shared infrastructure.
 Run instantly without installing:
 
 ```sh
-npx getsvg
+npx @avdeshjadon/get-svg
 ```
 
 Or install globally via npm:
 
 ```sh
-npm install -g getsvg
+npm install -g @avdeshjadon/get-svg
 ```
 
 ### Pre-built binaries (recommended)
