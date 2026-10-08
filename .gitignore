@@ -6,3 +6,5 @@ Cargo.lock.orig
 .DS_Store
 node_modules/
 package-lock.json
+dist/
+svgfetch/dist/

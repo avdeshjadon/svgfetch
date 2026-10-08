@@ -11,7 +11,7 @@ homepage = "https://github.com/avdeshjadon/svgfetch"
 readme = "README.md"
 keywords = ["svg", "wikimedia", "commons", "download", "tui"]
 categories = ["command-line-utilities", "multimedia"]
-exclude = ["/.github"]
+exclude = ["/.github", "/svgfetch"]
 default-run = "svgfetch"
 
 [lib]
