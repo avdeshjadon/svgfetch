@@ -96,5 +96,4 @@ Wikimedia directly from a new command.
 ## License
 
 By contributing, you agree your contributions are licensed under the crate's
-dual MIT/Apache-2.0 license, with the copyright held per [LICENSE-MIT](LICENSE-MIT)
-and [LICENSE-APACHE](LICENSE-APACHE).
+[GNU Affero General Public License v3.0](LICENSE).

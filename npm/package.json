@@ -1,6 +1,6 @@
 {
   "name": "svgfetch",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publishConfig": {
     "access": "public"
   },
@@ -31,7 +31,7 @@
     "graphics"
   ],
   "author": "Avdesh Jadon <theavdeshjadon@gmail.com>",
-  "license": "MIT OR Apache-2.0",
+  "license": "AGPL-3.0-only",
   "bugs": {
     "url": "https://github.com/avdeshjadon/svgfetch/issues"
   },
@@ -39,8 +39,7 @@
   "files": [
     "bin",
     "README.md",
-    "LICENSE-MIT",
-    "LICENSE-APACHE"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=16"

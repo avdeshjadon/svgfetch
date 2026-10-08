@@ -43,4 +43,4 @@ For full documentation, CLI commands, and flags, visit the GitHub repository:
 
 ## License
 
-MIT OR Apache-2.0
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).

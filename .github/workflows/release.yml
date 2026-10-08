@@ -102,7 +102,7 @@ jobs:
           cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/svg-fetch$EXT"
           cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/get-svg$EXT"
           cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/getsvg$EXT"
-          cp README.md LICENSE-MIT LICENSE-APACHE "dist/$PREFIX/"
+          cp README.md LICENSE "dist/$PREFIX/"
           cd dist
           if [ "$ARCHIVE" = "zip" ]; then
             7z a "$ARTIFACT" "$PREFIX"
