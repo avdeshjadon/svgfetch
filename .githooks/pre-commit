@@ -9,3 +9,13 @@ if [ -f "$REPO_ROOT/scripts/bump.js" ]; then
   # If npm/package.json or Cargo.lock were updated, automatically stage them
   git add "$REPO_ROOT/npm/package.json" "$REPO_ROOT/Cargo.lock" 2>/dev/null || true
 fi
+
+# Auto-cleanup safeguard: keep target/ size under 4GB automatically
+if [ -d "$REPO_ROOT/target" ]; then
+  TARGET_KB=$(du -sk "$REPO_ROOT/target" 2>/dev/null | cut -f1)
+  # 4 GB = 4,194,304 KB
+  if [ "${TARGET_KB:-0}" -gt 4194304 ]; then
+    echo "🧹 [svgfetch] target/ directory exceeds 4GB ($(( TARGET_KB / 1024 )) MB). Auto-cleaning cache..."
+    cargo clean
+  fi
+fi
