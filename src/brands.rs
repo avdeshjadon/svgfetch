@@ -4,12 +4,53 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::models::AssetVariant;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BrandInfo {
     pub name: String,
     pub file: String,
     #[serde(default)]
     pub aliases: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wordmark_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mascot_file: Option<String>,
+}
+
+impl BrandInfo {
+    /// Return the preferred file for a given asset variant if configured.
+    pub fn file_for_variant(&self, variant: AssetVariant) -> Option<&str> {
+        match variant {
+            AssetVariant::Default => Some(&self.file),
+            AssetVariant::Icon => self.icon_file.as_deref().or(Some(&self.file)),
+            AssetVariant::Wordmark => self.wordmark_file.as_deref(),
+            AssetVariant::Full => self.full_file.as_deref().or(Some(&self.file)),
+            AssetVariant::Mascot => self.mascot_file.as_deref(),
+        }
+    }
+
+    /// List known available variants for this brand.
+    pub fn available_variants(&self) -> Vec<AssetVariant> {
+        let mut list = vec![AssetVariant::Default];
+        if self.icon_file.is_some() {
+            list.push(AssetVariant::Icon);
+        }
+        if self.wordmark_file.is_some() {
+            list.push(AssetVariant::Wordmark);
+        }
+        if self.full_file.is_some() {
+            list.push(AssetVariant::Full);
+        }
+        if self.mascot_file.is_some() {
+            list.push(AssetVariant::Mascot);
+        }
+        list
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,5 +217,107 @@ mod tests {
         assert_eq!(slugify("Amazon"), "amazon");
         assert_eq!(slugify("Amazon Prime"), "amazon-prime");
         assert_eq!(slugify("Amazon Music (Logo)"), "amazon-music-logo");
+    }
+
+    #[test]
+    fn test_facebook_does_not_resolve_to_meta() {
+        let reg = BrandRegistry::load();
+        let fb = reg.resolve("facebook").expect("facebook should resolve");
+        assert_eq!(fb.name, "Facebook");
+        assert_ne!(fb.name, "Meta");
+
+        let meta = reg.resolve("meta").expect("meta should resolve");
+        assert_eq!(meta.name, "Meta");
+        assert_ne!(meta.name, "Facebook");
+    }
+
+    #[test]
+    fn test_curated_variants_mapping() {
+        let reg = BrandRegistry::load();
+
+        // Instagram
+        let insta = reg.resolve("instagram").expect("instagram");
+        assert_eq!(
+            insta.file_for_variant(AssetVariant::Default),
+            Some("File:Instagram logo 2016.svg")
+        );
+        assert_eq!(
+            insta.file_for_variant(AssetVariant::Icon),
+            Some("File:Instagram logo 2016.svg")
+        );
+        assert_eq!(
+            insta.file_for_variant(AssetVariant::Wordmark),
+            Some("File:Instagram wordmark.svg")
+        );
+
+        // Docker
+        let docker = reg.resolve("docker").expect("docker");
+        assert_eq!(
+            docker.file_for_variant(AssetVariant::Default),
+            Some("File:Docker Logo.svg")
+        );
+        assert_eq!(
+            docker.file_for_variant(AssetVariant::Icon),
+            Some("File:Docker (container engine) logo.svg")
+        );
+        assert_eq!(
+            docker.file_for_variant(AssetVariant::Full),
+            Some("File:Docker Logo.svg")
+        );
+
+        // GitHub
+        let gh = reg.resolve("github").expect("github");
+        assert_eq!(
+            gh.file_for_variant(AssetVariant::Default),
+            Some("File:Octicons-mark-github.svg")
+        );
+        assert_eq!(
+            gh.file_for_variant(AssetVariant::Icon),
+            Some("File:Octicons-mark-github.svg")
+        );
+        assert_eq!(
+            gh.file_for_variant(AssetVariant::Full),
+            Some("File:GitHub logo 2013.svg")
+        );
+
+        // Linux vs Tux
+        let linux = reg.resolve("linux").expect("linux");
+        assert_eq!(
+            linux.file_for_variant(AssetVariant::Default),
+            Some("File:Linux tux circle logo.svg")
+        );
+        assert_eq!(
+            linux.file_for_variant(AssetVariant::Mascot),
+            Some("File:Tux.svg")
+        );
+
+        let tux = reg.resolve("tux").expect("tux");
+        assert_eq!(
+            tux.file_for_variant(AssetVariant::Default),
+            Some("File:Tux.svg")
+        );
+        assert_eq!(
+            tux.file_for_variant(AssetVariant::Mascot),
+            Some("File:Tux.svg")
+        );
+
+        // Kali Linux
+        let kali = reg.resolve("kali linux").expect("kali linux");
+        assert_eq!(kali.name, "Kali Linux");
+        assert_eq!(
+            kali.file_for_variant(AssetVariant::Mascot),
+            Some("File:Kali-dragon-icon.svg")
+        );
+
+        // Python
+        let python = reg.resolve("python").expect("python");
+        assert_eq!(
+            python.file_for_variant(AssetVariant::Icon),
+            Some("File:Python-logo-notext.svg")
+        );
+        assert_eq!(
+            python.file_for_variant(AssetVariant::Wordmark),
+            Some("File:Python logo and wordmark.svg")
+        );
     }
 }

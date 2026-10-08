@@ -50,19 +50,37 @@
       "name": "Microsoft",
       "file": "File:Microsoft logo (2012).svg"
     },
+    "facebook": {
+      "name": "Facebook",
+      "file": "File:Facebook logo (2019).svg",
+      "aliases": [
+        "fb",
+        "facebook logo"
+      ],
+      "icon_file": "File:Facebook logo (2019).svg",
+      "wordmark_file": "File:Facebook New Logo (2015).svg",
+      "full_file": "File:Facebook New Logo (2015).svg"
+    },
     "meta": {
       "name": "Meta",
       "file": "File:Meta Platforms Inc. logo.svg",
       "aliases": [
-        "facebook"
-      ]
+        "meta platforms"
+      ],
+      "icon_file": "File:Meta Platforms Inc. logo.svg",
+      "wordmark_file": "File:Meta Platforms Inc. logo.svg",
+      "full_file": "File:Meta Platforms Inc. logo.svg"
     },
     "instagram": {
       "name": "Instagram",
       "file": "File:Instagram logo 2016.svg",
       "aliases": [
-        "insta"
-      ]
+        "insta",
+        "ig"
+      ],
+      "icon_file": "File:Instagram logo 2016.svg",
+      "wordmark_file": "File:Instagram wordmark.svg",
+      "full_file": "File:Instagram logo 2016.svg"
     },
     "whatsapp": {
       "name": "WhatsApp",
@@ -90,7 +108,14 @@
     },
     "github": {
       "name": "GitHub",
-      "file": "File:Octicons-mark-github.svg"
+      "file": "File:Octicons-mark-github.svg",
+      "aliases": [
+        "gh",
+        "github logo"
+      ],
+      "icon_file": "File:Octicons-mark-github.svg",
+      "wordmark_file": "File:GitHub logo 2013.svg",
+      "full_file": "File:GitHub logo 2013.svg"
     },
     "twitter": {
       "name": "Twitter",
@@ -204,7 +229,14 @@
     },
     "docker": {
       "name": "Docker",
-      "file": "File:Docker Logo.svg"
+      "file": "File:Docker Logo.svg",
+      "aliases": [
+        "docker logo",
+        "docker container"
+      ],
+      "icon_file": "File:Docker (container engine) logo.svg",
+      "wordmark_file": "File:Docker Logo.svg",
+      "full_file": "File:Docker Logo.svg"
     },
     "kubernetes": {
       "name": "Kubernetes",
@@ -212,6 +244,62 @@
       "aliases": [
         "k8s"
       ]
+    },
+    "linux": {
+      "name": "Linux",
+      "file": "File:Linux tux circle logo.svg",
+      "aliases": [
+        "linux kernel"
+      ],
+      "icon_file": "File:Linux tux circle logo.svg",
+      "wordmark_file": "File:Linux tux circle logo.svg",
+      "full_file": "File:Linux tux circle logo.svg",
+      "mascot_file": "File:Tux.svg"
+    },
+    "tux": {
+      "name": "Tux",
+      "file": "File:Tux.svg",
+      "aliases": [
+        "tux penguin",
+        "linux mascot",
+        "tux linux"
+      ],
+      "icon_file": "File:Tux.svg",
+      "wordmark_file": "File:Tux.svg",
+      "full_file": "File:Tux.svg",
+      "mascot_file": "File:Tux.svg"
+    },
+    "kali linux": {
+      "name": "Kali Linux",
+      "file": "File:Kali Linux 2.0 wordmark.svg",
+      "aliases": [
+        "kali"
+      ],
+      "icon_file": "File:Kali-dragon-icon.svg",
+      "wordmark_file": "File:Kali Linux 2.0 wordmark.svg",
+      "full_file": "File:Kali Linux 2.0 wordmark.svg",
+      "mascot_file": "File:Kali-dragon-icon.svg"
+    },
+    "python": {
+      "name": "Python",
+      "file": "File:Python-logo-notext.svg",
+      "aliases": [
+        "python lang",
+        "python language"
+      ],
+      "icon_file": "File:Python-logo-notext.svg",
+      "wordmark_file": "File:Python logo and wordmark.svg",
+      "full_file": "File:Python logo and wordmark.svg"
+    },
+    "ubuntu": {
+      "name": "Ubuntu",
+      "file": "File:Ubuntu-logo-2022.svg",
+      "aliases": [
+        "canonical ubuntu"
+      ],
+      "icon_file": "File:Ubuntu-Logo ohne Schriftzug.svg",
+      "wordmark_file": "File:Ubuntu-logo-2022.svg",
+      "full_file": "File:Ubuntu-logo-2022.svg"
     },
     "helm": {
       "name": "Helm",

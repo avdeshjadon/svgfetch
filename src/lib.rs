@@ -22,11 +22,14 @@ pub mod metadata;
 pub mod models;
 pub mod output;
 pub mod project;
+pub mod resolution;
 pub mod search;
 pub mod security;
 pub mod ui;
 pub mod uninstall;
 pub mod update;
+
+pub use models::AssetVariant;
 
 /// Crate version, used for User-Agent strings and `version` output.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. This project
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-10-09
+
+### Added
+- **Exact Asset Variants**: Added `--variant <VARIANT>` option supporting `default`, `icon`, `wordmark`, `full`, and `mascot` with friendly aliases (`symbol`, `mark`, `text`, `logotype`, `lockup`, `character`).
+- **Natural Language Variant Parsing**: Automatically extract variant keywords from queries (`svgfetch instagram wordmark`, `svgfetch linux mascot`) with explicit CLI flag precedence.
+- **Exact Entity Resolution**: Entity-first resolution prioritizing exact entity semantics (e.g. Facebook != Meta, Instagram != Meta, Kali Linux != Linux, Linux != Tux unless mascot requested).
+- **Curated Multi-Variant Registry**: Added variant file mappings for major brands (Instagram, Docker, GitHub, Linux, Kali Linux, Facebook, Meta, Python, Ubuntu) in `brands.json`.
+- **Smart Hints & Suggestions**: Contextual variant recommendations for ambiguous queries and safe unknown query handling preventing random SVG downloads.
+- **Enhanced Info Transparency**: `svgfetch info <query>` reports query, resolved entity, entity type, variant, selected asset, confidence percentage, and reason.
+
 ## [0.2.5] - 2026-10-08
 
 ### Added

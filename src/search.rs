@@ -246,6 +246,7 @@ mod tests {
             categories: vec![],
             uploaded_at: None,
             modified_at: None,
+            ..Default::default()
         }
     }
 

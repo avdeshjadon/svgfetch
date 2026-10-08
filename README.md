@@ -90,6 +90,71 @@ svgfetch
 
 ---
 
+## Asset Variants
+
+SVGFetch automatically selects the best canonical asset when no variant is specified.
+
+Use `--variant` (or natural language words in your query) when you need a specific form of a logo:
+
+| Variant | Meaning | Example CLI Command |
+|---|---|---|
+| `default` | Best canonical asset for the entity | `svgfetch instagram` |
+| `icon` | Icon, symbol, or mark only | `svgfetch instagram --variant icon` |
+| `wordmark` | Text-based brand name / logotype | `svgfetch instagram --variant wordmark` |
+| `full` | Complete logo + wordmark / lockup | `svgfetch instagram --variant full` |
+| `mascot` | Mascot or character asset | `svgfetch linux --variant mascot` |
+
+### Natural Language Variant Syntax
+
+You can specify variants via the `--variant` flag or directly as natural words in your query:
+
+```sh
+# Explicit flag syntax
+svgfetch instagram --variant icon
+svgfetch instagram --variant wordmark
+svgfetch instagram --variant full
+
+# Natural language query syntax
+svgfetch instagram icon
+svgfetch instagram wordmark
+svgfetch instagram full
+
+svgfetch docker icon
+svgfetch docker wordmark
+svgfetch docker full
+
+svgfetch linux mascot
+svgfetch kali linux mascot
+```
+
+If both query words and an explicit `--variant` flag are provided, the explicit CLI flag takes priority (e.g., `svgfetch instagram wordmark --variant icon` resolves to the Instagram icon).
+
+---
+
+## Exact Entity Matching
+
+SVGFetch distinguishes related entities through semantic resolution and entity-first priority:
+
+| User Query | Resolved Entity | Asset Description |
+|---|---|---|
+| `facebook` | Facebook | Facebook canonical logo / icon |
+| `meta` | Meta | Meta Platforms corporate logo |
+| `instagram` | Instagram | Instagram camera icon / logo |
+| `linux` | Linux | Linux circle branding logo |
+| `tux` | Tux | Tux penguin mascot |
+| `kali linux` | Kali Linux | Kali Linux wordmark / branding |
+| `ubuntu` | Ubuntu | Ubuntu circle of friends / logo |
+| `docker` | Docker | Docker container logo / whale icon |
+| `python` | Python | Python programming language logo |
+| `github` | GitHub | GitHub Octicons mark / logo |
+
+- **Facebook will not automatically resolve to Meta.**
+- **Instagram will not automatically resolve to Meta.**
+- **Kali Linux will not automatically resolve to generic Linux.**
+- **Linux will not automatically resolve to Tux unless mascot intent is specified.**
+
+---
+
 ## Command Reference
 
 | Command | Description |
@@ -118,16 +183,40 @@ svgfetch
 
 ### CLI Examples
 
+Download standard brand logo:
+
+```sh
+svgfetch instagram
+```
+
+Download specific variants:
+
+```sh
+# Icon only
+svgfetch instagram --variant icon
+
+# Wordmark / logotype
+svgfetch instagram --variant wordmark
+
+# Full logo lockup
+svgfetch docker --variant full
+
+# Character mascot
+svgfetch linux --variant mascot
+```
+
+Inspect resolution and metadata without downloading:
+
+```sh
+svgfetch info instagram
+svgfetch info instagram --variant wordmark
+svgfetch info "File:GitHub_Logo.svg" --format json
+```
+
 Dry-run resolution without downloading:
 
 ```sh
-svgfetch amazon --dry-run
-```
-
-Inspect asset metadata without downloading:
-
-```sh
-svgfetch info "File:GitHub_Logo.svg" --format json
+svgfetch instagram --dry-run
 ```
 
 Search and export results as JSON:

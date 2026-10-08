@@ -132,136 +132,130 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
             }
             Command::Uninstall { yes } => crate::uninstall::run_uninstall(yes),
             Command::Update => crate::update::run_update().await,
-            Command::Info { asset, format } => cmd_info(&asset, format).await,
+            Command::Info {
+                asset,
+                variant,
+                format,
+            } => {
+                let effective_variant = variant.or(cli.variant);
+                cmd_info(&asset, effective_variant, format).await
+            }
         }
     } else if !cli.brand.is_empty() {
         let query = cli.brand.join(" ");
-        cmd_direct_brand(
-            &query,
-            cli.output,
-            cli.overwrite,
-            cli.dry_run,
-            cli.no_project,
-            cli.refresh,
-        )
+        cmd_direct_brand(DirectBrandArgs {
+            query,
+            variant_flag: cli.variant,
+            output: cli.output,
+            overwrite: cli.overwrite,
+            dry_run: cli.dry_run,
+            no_project: cli.no_project,
+            refresh: cli.refresh,
+            verbose: cli.verbose,
+        })
         .await
     } else {
         interactive()
     }
 }
 
-/// Instant direct brand/logo resolver and downloader.
-pub async fn cmd_direct_brand(
-    query: &str,
-    output: Option<PathBuf>,
-    overwrite: bool,
-    dry_run: bool,
-    no_project: bool,
-    refresh: bool,
-) -> Result<i32> {
+/// Arguments for direct brand resolution and download.
+#[derive(Debug, Clone)]
+pub struct DirectBrandArgs {
+    pub query: String,
+    pub variant_flag: Option<crate::models::AssetVariant>,
+    pub output: Option<PathBuf>,
+    pub overwrite: bool,
+    pub dry_run: bool,
+    pub no_project: bool,
+    pub refresh: bool,
+    pub verbose: bool,
+}
+
+/// Instant direct brand/logo resolver and downloader with variant awareness.
+pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     let settings = Settings::load()?;
     let provider = WikimediaClient::new(&settings)?;
     let cache = Cache::new(&settings);
-    let registry = crate::brands::BrandRegistry::load();
 
     let started = std::time::Instant::now();
-    let query_trim = query.trim();
+    let query_trim = args.query.trim();
 
-    // 1. Resolve brand (curated registry first, then search fallback)
-    let (asset, is_curated, brand_name) = if let Some(brand) = registry.resolve(query_trim) {
-        eprintln!(
-            "\x1b[1;32m\u{2713}\x1b[0m Curated brand mapping: \x1b[1m{}\x1b[0m",
-            brand.name
-        );
-        match provider.get_asset(&brand.file).await? {
-            Some(a) => (a, true, brand.name.clone()),
-            None => {
-                let found =
-                    search::fetch_page_opts(&provider, &cache, &brand.file, 0, 5, refresh).await?;
-                if let Some(a) = found.page.assets.into_iter().next() {
-                    (a, true, brand.name.clone())
-                } else {
-                    return Err(Error::Other(format!(
-                        "Curated brand file '{}' could not be resolved from Wikimedia",
-                        brand.file
-                    )));
-                }
-            }
-        }
-    } else {
-        eprintln!("Searching for official \"{}\" logo...", query_trim);
-        let search_query = format!("{query_trim} logo filetype:svg");
-        let found =
-            search::fetch_page_opts(&provider, &cache, &search_query, 0, 15, refresh).await?;
-
-        let norm_q = crate::brands::normalize(query_trim);
-        let best = found
-            .page
-            .assets
-            .iter()
-            .find(|a| {
-                let norm_title = crate::brands::normalize(a.original_name.trim_end_matches(".svg"));
-                norm_title == norm_q || norm_title.starts_with(&norm_q)
-            })
-            .or_else(|| {
-                found
-                    .page
-                    .assets
-                    .iter()
-                    .find(|a| a.original_name.to_lowercase().contains(&norm_q))
-            })
-            .or_else(|| found.page.assets.first())
-            .cloned();
-
-        match best {
-            Some(a) => {
-                eprintln!(
-                    "\u{2139} \"{}\" is not yet in curated brands.json.",
-                    query_trim
-                );
-                eprintln!(
-                    "\x1b[1;32m\u{2713}\x1b[0m Best match: \x1b[1m{}\x1b[0m",
-                    a.original_name
-                );
-                (a, false, query_trim.to_string())
-            }
-            None => {
-                eprintln!(
-                    "\x1b[1;31m\u{2717} No SVG logo found for \"{}\".\x1b[0m",
-                    query_trim
-                );
-                eprintln!("Tip: Run `svgfetch` with no arguments to search interactively.");
-                return Ok(1);
-            }
+    // 1. Resolve exact entity and variant
+    let resolution = match crate::resolution::resolve_entity_and_variant(
+        &provider,
+        &cache,
+        query_trim,
+        args.variant_flag,
+        args.refresh,
+        args.verbose,
+    )
+    .await?
+    {
+        Some(res) => res,
+        None => {
+            eprintln!("{}", crate::resolution::unknown_query_message(query_trim));
+            return Ok(1);
         }
     };
 
+    let brand_name = resolution.resolved_entity.clone();
+    let asset = resolution.asset.clone();
+
+    if resolution.is_curated {
+        if resolution.variant == crate::models::AssetVariant::Default {
+            eprintln!(
+                "\x1b[1;32m\u{2713}\x1b[0m Curated brand mapping: \x1b[1m{}\x1b[0m",
+                brand_name
+            );
+        } else {
+            eprintln!(
+                "\x1b[1;32m\u{2713}\x1b[0m Curated brand mapping: \x1b[1m{} ({})\x1b[0m",
+                brand_name,
+                resolution.variant.as_str()
+            );
+        }
+    } else {
+        eprintln!(
+            "\x1b[1;32m\u{2713}\x1b[0m Best match: \x1b[1m{}\x1b[0m ({}% confidence, {})",
+            asset.original_name,
+            resolution.confidence,
+            resolution.variant.as_str()
+        );
+    }
+
+    // Smart hints if useful
+    if let Some(hint) = crate::resolution::suggest_variants(&resolution) {
+        if !args.dry_run && resolution.confidence < 90 {
+            eprintln!("\n\x1b[36m\u{2139} Hint:\x1b[0m\n{}\n", hint);
+        }
+    }
+
     // 2. Determine target file path
-    let (target_file, project_ctx) = match output {
+    let variant_suffix = match resolution.variant {
+        crate::models::AssetVariant::Default => String::new(),
+        v => format!("-{}", v.as_str()),
+    };
+    let out_slug = format!("{}{}", crate::brands::slugify(&brand_name), variant_suffix);
+
+    let (target_file, project_ctx) = match args.output {
         Some(p) => {
             let is_target_dir = p.is_dir()
                 || p.to_string_lossy().ends_with('/')
                 || p.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
             let file_path = if is_target_dir {
-                std::fs::create_dir_all(&p)?;
-                let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                let filename = format!("{out_slug}.svg");
                 p.join(filename)
             } else if p.extension().is_some() {
-                if let Some(parent) = p.parent() {
-                    if !parent.as_os_str().is_empty() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-                }
                 p
             } else {
-                std::fs::create_dir_all(&p)?;
-                let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                let filename = format!("{out_slug}.svg");
                 p.join(filename)
             };
             (file_path, None)
         }
         None => {
-            let use_project = !no_project && settings.project_detection;
+            let use_project = !args.no_project && settings.project_detection;
             if use_project {
                 if let Some(ctx) = crate::project::find_project_context() {
                     eprintln!(
@@ -269,20 +263,17 @@ pub async fn cmd_direct_brand(
                         ctx.kind.display_name(),
                         ctx.root_name()
                     );
-                    std::fs::create_dir_all(&ctx.target_dir)?;
-                    let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                    let filename = format!("{out_slug}.svg");
                     let path = ctx.target_dir.join(filename);
                     (path, Some(ctx))
                 } else {
                     let base_dir = settings.download_dir.clone();
-                    std::fs::create_dir_all(&base_dir)?;
-                    let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                    let filename = format!("{out_slug}.svg");
                     (base_dir.join(filename), None)
                 }
             } else {
                 let base_dir = settings.download_dir.clone();
-                std::fs::create_dir_all(&base_dir)?;
-                let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                let filename = format!("{out_slug}.svg");
                 (base_dir.join(filename), None)
             }
         }
@@ -298,8 +289,11 @@ pub async fn cmd_direct_brand(
         crate::config::contract_tilde(&target_file)
     };
 
-    if dry_run {
+    if args.dry_run {
         println!("Brand       : {}", brand_name);
+        if resolution.variant != crate::models::AssetVariant::Default {
+            println!("Variant     : {}", resolution.variant.as_str());
+        }
         println!("Provider    : Wikimedia Commons");
         println!(
             "Source      : {}",
@@ -311,7 +305,13 @@ pub async fn cmd_direct_brand(
         return Ok(0);
     }
 
-    if target_file.exists() && !overwrite {
+    if let Some(parent) = target_file.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    if target_file.exists() && !args.overwrite {
         eprintln!(
             "\x1b[1;33m\u{26A0}\x1b[0m File '{}' already exists. Use `--overwrite` to replace.",
             pretty_path
@@ -361,7 +361,7 @@ pub async fn cmd_direct_brand(
                 crate::models::format_ms(started.elapsed().as_millis() as u64)
             );
 
-            if !is_curated {
+            if !resolution.is_curated {
                 eprintln!(
                     "\x1b[2m💡 Tip: Want to curate this brand mapping? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch\x1b[0m"
                 );
@@ -379,55 +379,102 @@ pub async fn cmd_direct_brand(
     }
 }
 
-/// Display detailed metadata for an asset without downloading.
-pub async fn cmd_info(asset_name: &str, format: OutputFormat) -> Result<i32> {
+/// Display detailed metadata and exact entity/variant resolution for an asset without downloading.
+pub async fn cmd_info(
+    asset_name: &str,
+    variant_flag: Option<crate::models::AssetVariant>,
+    format: OutputFormat,
+) -> Result<i32> {
     let settings = Settings::load()?;
     let provider = WikimediaClient::new(&settings)?;
     let cache = Cache::new(&settings);
-    let registry = crate::brands::BrandRegistry::load();
 
     let asset_name_trim = asset_name.trim();
-    let asset =
-        if let Some(brand) = registry.resolve(asset_name_trim) {
-            match provider.get_asset(&brand.file).await? {
-                Some(a) => a,
-                None => {
-                    let found = search::fetch_page(&provider, &cache, &brand.file, 0, 5).await?;
-                    found.page.assets.into_iter().next().ok_or_else(|| {
-                        Error::Other(format!("Asset '{}' not found", asset_name_trim))
-                    })?
-                }
-            }
-        } else {
-            let title =
-                if asset_name_trim.starts_with("File:") || asset_name_trim.starts_with("file:") {
-                    asset_name_trim.to_string()
-                } else if asset_name_trim.ends_with(".svg") {
-                    format!("File:{}", asset_name_trim)
-                } else {
-                    asset_name_trim.to_string()
-                };
 
-            match provider.get_asset(&title).await? {
-                Some(a) => a,
-                None => {
-                    let found =
-                        search::fetch_page(&provider, &cache, asset_name_trim, 0, 10).await?;
-                    found.page.assets.into_iter().next().ok_or_else(|| {
-                        Error::Other(format!(
-                            "Asset '{}' not found on Wikimedia Commons",
-                            asset_name_trim
-                        ))
-                    })?
-                }
+    // Check if it's an explicit file name (e.g. File:GitHub_Logo.svg or logo.svg)
+    let is_direct_file = asset_name_trim.starts_with("File:")
+        || asset_name_trim.starts_with("file:")
+        || asset_name_trim.ends_with(".svg");
+
+    let (asset, resolution_info) = if is_direct_file {
+        let title = if asset_name_trim.starts_with("File:") || asset_name_trim.starts_with("file:")
+        {
+            asset_name_trim.to_string()
+        } else {
+            format!("File:{}", asset_name_trim)
+        };
+
+        let a = match provider.get_asset(&title).await? {
+            Some(a) => a,
+            None => {
+                let found = search::fetch_page(&provider, &cache, asset_name_trim, 0, 10).await?;
+                found.page.assets.into_iter().next().ok_or_else(|| {
+                    Error::Other(format!(
+                        "Asset '{}' not found on Wikimedia Commons",
+                        asset_name_trim
+                    ))
+                })?
             }
         };
+        (a, None)
+    } else {
+        // Entity resolution with variant
+        match crate::resolution::resolve_entity_and_variant(
+            &provider,
+            &cache,
+            asset_name_trim,
+            variant_flag,
+            false,
+            false,
+        )
+        .await?
+        {
+            Some(res) => (res.asset.clone(), Some(res)),
+            None => {
+                let found = search::fetch_page(&provider, &cache, asset_name_trim, 0, 10).await?;
+                let a = found.page.assets.into_iter().next().ok_or_else(|| {
+                    Error::Other(format!(
+                        "Asset '{}' not found on Wikimedia Commons",
+                        asset_name_trim
+                    ))
+                })?;
+                (a, None)
+            }
+        }
+    };
 
     match format {
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&asset)?);
         }
         _ => {
+            if let Some(res) = resolution_info {
+                println!("Query:");
+                println!("{}", res.query);
+                println!();
+                println!("Resolved entity:");
+                println!("{}", res.resolved_entity);
+                println!();
+                println!("Entity type:");
+                println!("{}", res.entity_type);
+                println!();
+                println!("Asset type:");
+                println!("{}", res.asset_type);
+                println!();
+                println!("Variant:");
+                println!("{}", res.variant.as_str());
+                println!();
+                println!("Selected asset:");
+                println!("{}", res.selected_asset);
+                println!();
+                println!("Confidence:");
+                println!("{}%", res.confidence);
+                println!();
+                println!("Reason:");
+                println!("{}", res.match_reason);
+                println!();
+            }
+
             println!("Asset Information: {}", asset.title);
             println!("{}", "-".repeat(60));
             println!("File        : {}", asset.original_name);

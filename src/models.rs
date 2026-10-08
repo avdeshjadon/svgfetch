@@ -65,6 +65,113 @@ pub struct Asset {
     pub uploaded_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified_at: Option<DateTime<Utc>>,
+
+    /// User query string for resolution/info reporting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    /// Canonical resolved entity name (e.g. "Instagram", "Docker").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_entity: Option<String>,
+    /// Entity categorization (e.g. "brand", "software", "project").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<String>,
+    /// Asset category (e.g. "brand_logo", "mascot", "icon").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_type: Option<String>,
+    /// Asset variant resolved (e.g. "default", "icon", "wordmark", "full", "mascot").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+    /// Selected asset title or filename.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_asset: Option<String>,
+    /// Resolution confidence percentage (0-100).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<u32>,
+    /// Human-readable explanation of why this asset was chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_reason: Option<String>,
+}
+
+/// Strongly typed asset variant requested by the user or resolved by SVGFetch.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, clap::ValueEnum, Default,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum AssetVariant {
+    /// Best canonical asset for the entity.
+    #[default]
+    #[value(name = "default")]
+    Default,
+
+    /// Icon, symbol, or mark only.
+    #[value(name = "icon", alias = "icons", alias = "symbol", alias = "mark")]
+    Icon,
+
+    /// Text-based brand name / logotype.
+    #[value(
+        name = "wordmark",
+        alias = "word",
+        alias = "text",
+        alias = "text-logo",
+        alias = "logotype"
+    )]
+    Wordmark,
+
+    /// Complete logo + wordmark / lockup.
+    #[value(
+        name = "full",
+        alias = "complete",
+        alias = "lockup",
+        alias = "full-logo"
+    )]
+    Full,
+
+    /// Mascot or character asset.
+    #[value(name = "mascot", alias = "character")]
+    Mascot,
+}
+
+impl AssetVariant {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Icon => "icon",
+            Self::Wordmark => "wordmark",
+            Self::Full => "full",
+            Self::Mascot => "mascot",
+        }
+    }
+
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        let norm = s.trim().to_lowercase().replace(['-', '_'], " ");
+        let norm = norm.trim();
+        match norm {
+            "default" => Some(Self::Default),
+            "icon" | "icons" | "symbol" | "mark" => Some(Self::Icon),
+            "wordmark" | "word" | "text" | "text logo" | "text-logo" | "logotype" => {
+                Some(Self::Wordmark)
+            }
+            "full" | "complete" | "lockup" | "full logo" | "full-logo" => Some(Self::Full),
+            "mascot" | "character" => Some(Self::Mascot),
+            _ => None,
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::Default => "Best canonical asset for the entity",
+            Self::Icon => "Icon/symbol/mark only",
+            Self::Wordmark => "Text-based brand name / logotype",
+            Self::Full => "Complete logo + wordmark / lockup",
+            Self::Mascot => "Mascot or character asset",
+        }
+    }
+}
+
+impl std::fmt::Display for AssetVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 impl Asset {
@@ -164,6 +271,14 @@ impl Asset {
             modified_at: get("timestamp")
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|d| d.with_timezone(&Utc)),
+            query: None,
+            resolved_entity: None,
+            entity_type: None,
+            asset_type: None,
+            variant: None,
+            selected_asset: None,
+            confidence: None,
+            match_reason: None,
         })
     }
 

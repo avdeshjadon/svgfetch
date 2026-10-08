@@ -2,6 +2,31 @@
 
 use clap::{Parser, Subcommand};
 
+const HELP_EXAMPLES: &str = "\
+Variants:
+  default   Best canonical asset for the entity
+  icon      Icon/symbol/mark only
+  wordmark  Text-based brand name / logotype
+  full      Complete logo + wordmark / lockup
+  mascot    Mascot or character asset
+
+Examples:
+  svgfetch instagram
+  svgfetch instagram --variant icon
+  svgfetch instagram --variant wordmark
+  svgfetch instagram --variant full
+  svgfetch docker --variant full
+  svgfetch linux --variant mascot
+  svgfetch facebook
+  svgfetch github
+  svgfetch python
+  svgfetch info instagram --variant wordmark
+  svgfetch instagram --dry-run
+
+Behavior:
+  By default SVGFetch automatically selects the best matching canonical asset.
+  Use --variant when you need a specific asset type.";
+
 /// svgfetch — discover, inspect, and download SVG assets from Wikimedia Commons.
 #[derive(Debug, Parser)]
 #[command(
@@ -12,6 +37,7 @@ use clap::{Parser, Subcommand};
     long_about = "svgfetch is a terminal-first client for discovering, inspecting, and \
 downloading SVG assets from Wikimedia Commons.\n\nRun `svgfetch` with no arguments to \
 launch the interactive interface.",
+    after_help = HELP_EXAMPLES,
     propagate_version = true
 )]
 pub struct Cli {
@@ -22,6 +48,10 @@ pub struct Cli {
     /// Enable info logging.
     #[arg(short = 'v', long, global = true)]
     pub verbose: bool,
+
+    /// Asset variant to select: default, icon, wordmark, full, mascot.
+    #[arg(long, global = true, value_enum)]
+    pub variant: Option<crate::models::AssetVariant>,
 
     /// Optional destination directory or file path for direct brand download.
     #[arg(short = 'o', long = "output")]
@@ -231,6 +261,10 @@ pub enum Command {
         /// File name, MediaWiki title, or query (e.g. `File:GitHub_Logo.svg`, `amazon`, or `github.svg`).
         asset: String,
 
+        /// Asset variant: default, icon, wordmark, full, mascot.
+        #[arg(long, value_enum)]
+        variant: Option<crate::models::AssetVariant>,
+
         /// Output format.
         #[arg(long, short = 'f', value_enum, default_value_t = crate::output::OutputFormat::Table)]
         format: crate::output::OutputFormat,
@@ -367,11 +401,63 @@ mod tests {
     fn parses_info_command() {
         let cli = Cli::parse_from(["svgfetch", "info", "File:GitHub_Logo.svg", "-f", "json"]);
         match cli.command {
-            Some(Command::Info { asset, format }) => {
+            Some(Command::Info {
+                asset,
+                format,
+                variant,
+            }) => {
                 assert_eq!(asset, "File:GitHub_Logo.svg");
                 assert_eq!(format, crate::output::OutputFormat::Json);
+                assert!(variant.is_none());
             }
             other => panic!("unexpected command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_info_command_with_variant() {
+        let cli = Cli::parse_from(["svgfetch", "info", "instagram", "--variant", "wordmark"]);
+        match cli.command {
+            Some(Command::Info { asset, variant, .. }) => {
+                assert_eq!(asset, "instagram");
+                assert_eq!(variant, Some(crate::models::AssetVariant::Wordmark));
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_variant_flags_and_aliases() {
+        let cli = Cli::parse_from(["svgfetch", "instagram", "--variant", "icon"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Icon));
+
+        let cli = Cli::parse_from(["svgfetch", "instagram", "--variant", "symbol"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Icon));
+
+        let cli = Cli::parse_from(["svgfetch", "instagram", "--variant", "wordmark"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Wordmark));
+
+        let cli = Cli::parse_from(["svgfetch", "instagram", "--variant", "text"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Wordmark));
+
+        let cli = Cli::parse_from(["svgfetch", "docker", "--variant", "full"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Full));
+
+        let cli = Cli::parse_from(["svgfetch", "docker", "--variant", "lockup"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Full));
+
+        let cli = Cli::parse_from(["svgfetch", "linux", "--variant", "mascot"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Mascot));
+
+        let cli = Cli::parse_from(["svgfetch", "linux", "--variant", "character"]);
+        assert_eq!(cli.variant, Some(crate::models::AssetVariant::Mascot));
+    }
+
+    #[test]
+    fn rejects_invalid_variant_cleanly() {
+        let parsed = Cli::try_parse_from(["svgfetch", "instagram", "--variant", "banana"]);
+        assert!(parsed.is_err());
+        let err = parsed.unwrap_err().to_string();
+        assert!(err.contains("invalid value 'banana' for '--variant"));
     }
 }

@@ -331,6 +331,7 @@ mod tests {
             categories: vec!["Icons".into()],
             uploaded_at: None,
             modified_at: None,
+            ..Default::default()
         }
     }
 
