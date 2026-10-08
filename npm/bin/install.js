@@ -5,7 +5,8 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
-const VERSION = 'v0.2.4';
+const pkg = require('../package.json');
+const VERSION = `v${pkg.version}`;
 const REPO = 'avdeshjadon/svgfetch';
 
 function getTarget() {

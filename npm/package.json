@@ -11,7 +11,8 @@
     "svg-fetch": "bin/run.js"
   },
   "scripts": {
-    "postinstall": "node bin/install.js"
+    "postinstall": "node bin/install.js",
+    "bump": "node ../scripts/bump.js"
   },
   "repository": {
     "type": "git",

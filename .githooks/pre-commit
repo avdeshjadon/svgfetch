@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Git pre-commit hook to automatically synchronize version from Cargo.toml to npm/package.json & Cargo.lock
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [ -f "$REPO_ROOT/scripts/bump.js" ]; then
+  # Run sync mode (aligns npm/package.json with Cargo.toml)
+  node "$REPO_ROOT/scripts/bump.js"
+  
+  # If npm/package.json or Cargo.lock were updated, automatically stage them
+  git add "$REPO_ROOT/npm/package.json" "$REPO_ROOT/Cargo.lock" 2>/dev/null || true
+fi
