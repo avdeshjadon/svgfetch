@@ -4,7 +4,23 @@ All notable changes to this project are documented in this file. This project
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.2] - 2026-09-23
+## [0.2.5] - 2026-10-08
+
+### Added
+- **Unified Secure Download Pipeline**: Centralized streaming downloads with configurable file limits (`max_download_mb`), temporary `.part` file writes, atomic rename, and SHA-256 calculation.
+- **Content Validation**: SVG XML validation checking root namespaces and structure while rejecting HTML error pages, PE/ELF executables, and corrupted payloads.
+- **Dry-run Mode**: Global `--dry-run` flag to preview downloads, resolution, and targets without touching disk.
+- **Info Command**: `svgfetch info <asset>` to inspect dimensions, licenses, authors, and source URLs without downloading.
+- **Metadata Persistence**: Verifiable provenance records in `manifest.json`, `attribution.json`, `licenses.json`, and `sources.json`, preserving `saved_filename` vs `source_filename`, SHA-256, and multi-run merging.
+- **Cache Management**: Added `--refresh` and `--no-cache` flags with limit-aware cache keys.
+- **Project Overrides**: Added `--project` and `--no-project` flags for controlling automatic project detection.
+- **npm Package Verification**: Added prebuilt binary SHA-256 checksum verification in `npm/bin/install.js`.
+- **Single-Pass ZIP**: Direct local archiving from downloaded files when combining `--download` and `--zip`.
+
+### Changed
+- Clarified brand nomenclature to "Curated brand mapping".
+- Added system platform and binary version inspection to `svgfetch doctor`.
+- Removed `continue-on-error: true` from npm release publishing.
 
 ### Changed
 - Better `search` relevance: a single bare token like `github` or `amazon`

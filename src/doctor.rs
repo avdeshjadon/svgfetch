@@ -45,6 +45,20 @@ pub struct Report {
 pub async fn run(settings: &Settings) -> Result<Report> {
     let mut checks = Vec::new();
 
+    // 0. Binary version & platform
+    checks.push(Check {
+        name: "Binary version".into(),
+        status: Status::Ok,
+        detail: format!("v{}", crate::VERSION),
+        hint: None,
+    });
+    checks.push(Check {
+        name: "Platform".into(),
+        status: Status::Ok,
+        detail: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        hint: None,
+    });
+
     // 1. Config file
     let (status, detail, hint) = if settings.config_path.exists() {
         (Status::Ok, settings.config_path.display().to_string(), None)

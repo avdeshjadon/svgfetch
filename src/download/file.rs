@@ -6,13 +6,15 @@ use futures::StreamExt;
 use reqwest::Client;
 use tokio_util::sync::CancellationToken;
 
+use sha2::{Digest, Sha256};
+
 use crate::error::{Error, Result};
 use crate::security;
 
-/// Upper bound for a single downloaded file (4 GiB) — an SVG larger than
+/// Upper bound for a single downloaded file (default 100 MiB) — an SVG larger than
 /// this is almost certainly a mislabeled response; refuse rather than fill
 /// the user's disk.
-const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+pub const DEFAULT_MAX_FILE_BYTES: u64 = crate::config::DEFAULT_MAX_DOWNLOAD_MB * 1024 * 1024;
 
 /// A pluggable progress callback, invoked with (bytes written, total bytes).
 /// The total is 0 while it is unknown. Must be callable from spawned tasks.
@@ -20,8 +22,71 @@ pub type ProgressFn = Box<dyn FnMut(u64, u64) + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DownloadOutcome {
-    Written { path: PathBuf, bytes: u64 },
+    Written {
+        path: PathBuf,
+        bytes: u64,
+        sha256: String,
+    },
     Skipped,
+}
+
+/// Validate whether byte slice represents legitimate SVG content.
+/// Rejects HTML error pages, truncated/empty files, binary non-SVG data, etc.
+pub fn validate_svg_content(bytes: &[u8]) -> Result<()> {
+    if bytes.is_empty() {
+        return Err(Error::Download("downloaded file is empty (0 bytes)".into()));
+    }
+    if bytes.len() < 8 {
+        return Err(Error::Download(
+            "downloaded file is too small to be a valid SVG".into(),
+        ));
+    }
+
+    // Check for null bytes in initial header (indicates binary file like PNG, EXE, etc.)
+    let probe_len = bytes.len().min(1024);
+    if bytes[..probe_len].contains(&0) {
+        return Err(Error::Download(
+            "downloaded content contains binary null bytes and is not an SVG".into(),
+        ));
+    }
+
+    // Validate UTF-8 text representation
+    let text = match std::str::from_utf8(bytes) {
+        Ok(s) => s,
+        Err(_) => {
+            return Err(Error::Download(
+                "downloaded file is not valid UTF-8 SVG XML text".into(),
+            ));
+        }
+    };
+
+    let trimmed = text.trim();
+    let lower = trimmed.to_lowercase();
+
+    // Check if it's an HTML error/maintenance page
+    if (lower.starts_with("<!doctype html") || lower.starts_with("<html"))
+        && !lower.contains("<svg")
+    {
+        return Err(Error::Download(
+            "downloaded content is an HTML document, not an SVG".into(),
+        ));
+    }
+
+    // Must contain <svg element
+    if !lower.contains("<svg") {
+        return Err(Error::Download(
+            "downloaded content does not contain an <svg> element".into(),
+        ));
+    }
+
+    // Must contain </svg> or self-closing />
+    if !lower.contains("</svg>") && !lower.contains("/>") {
+        return Err(Error::Download(
+            "downloaded SVG is truncated (missing closing tag)".into(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Allocates collision-free file names inside a directory.
@@ -82,16 +147,29 @@ pub fn unique_path(dir: &Path, name: &str, overwrite: bool) -> Option<PathBuf> {
     NameAllocator::new().allocate(dir, name, overwrite)
 }
 
-/// Stream a URL to `path`.
-///
-/// * writes to `<path>.part-<pid>` first, then renames (atomic on POSIX),
-/// * honors cancellation at every chunk,
-/// * enforces a size ceiling and content-type sanity check,
-/// * reports progress through `progress` when a total size is known.
+/// Stream a URL to `path` with default size limit.
 pub async fn download_one(
     client: &Client,
     url: &str,
     path: &Path,
+    cancel: &CancellationToken,
+    progress: Option<ProgressFn>,
+) -> Result<DownloadOutcome> {
+    download_one_with_limit(client, url, path, DEFAULT_MAX_FILE_BYTES, cancel, progress).await
+}
+
+/// Stream a URL to `path` with configurable size limit.
+///
+/// * writes to `<path>.part-<pid>` first, validates SVG XML, then renames (atomic on POSIX),
+/// * computes SHA-256 checksum during streaming,
+/// * honors cancellation at every chunk,
+/// * enforces a configurable size ceiling and content-type sanity check,
+/// * reports progress through `progress` when a total size is known.
+pub async fn download_one_with_limit(
+    client: &Client,
+    url: &str,
+    path: &Path,
+    max_file_bytes: u64,
     cancel: &CancellationToken,
     mut progress: Option<ProgressFn>,
 ) -> Result<DownloadOutcome> {
@@ -120,12 +198,15 @@ pub async fn download_one(
         // Apply backoff if this is a retry attempt
         if attempt > 0 {
             let backoff_duration = match &last_error {
-                Some(Error::Http { status: 429, detail }) => {
-                    crate::api::rate_limit::parse_retry_after(detail)
-                        .unwrap_or_else(|| crate::api::rate_limit::backoff(attempt))
-                        .min(std::time::Duration::from_secs(10))
+                Some(Error::Http {
+                    status: 429,
+                    detail,
+                }) => crate::api::rate_limit::parse_retry_after(detail)
+                    .unwrap_or_else(|| crate::api::rate_limit::backoff(attempt))
+                    .min(std::time::Duration::from_secs(10)),
+                _ => {
+                    crate::api::rate_limit::backoff(attempt).min(std::time::Duration::from_secs(8))
                 }
-                _ => crate::api::rate_limit::backoff(attempt).min(std::time::Duration::from_secs(8)),
             };
 
             tracing::debug!(
@@ -211,9 +292,9 @@ pub async fn download_one(
         }
 
         let total = response.content_length().unwrap_or(0);
-        if total > MAX_FILE_BYTES {
+        if total > max_file_bytes {
             return Err(Error::Download(format!(
-                "file is larger than the {MAX_FILE_BYTES} byte limit"
+                "file is larger than the {max_file_bytes} byte limit"
             )));
         }
 
@@ -221,16 +302,35 @@ pub async fn download_one(
         std::fs::create_dir_all(parent)?;
 
         let tmp = temp_path_for(path);
-        let write = write_stream(response, &tmp, total, cancel, &mut progress).await;
+        let write =
+            write_stream(response, &tmp, total, max_file_bytes, cancel, &mut progress).await;
 
         match write {
-            Ok(bytes) => {
-                // Atomic publish: only fully-written files get their final name.
+            Ok(payload) => {
+                // Read and validate SVG structure before atomic rename
+                let read_res = std::fs::read(&tmp);
+                match read_res {
+                    Ok(bytes) => {
+                        if let Err(val_err) = validate_svg_content(&bytes) {
+                            let _ = std::fs::remove_file(&tmp);
+                            return Err(val_err);
+                        }
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&tmp);
+                        return Err(Error::Io(e));
+                    }
+                }
+
+                // Atomic publish: only fully-written and validated files get their final name.
                 match std::fs::rename(&tmp, path) {
-                    Ok(()) => return Ok(DownloadOutcome::Written {
-                        path: path.to_path_buf(),
-                        bytes,
-                    }),
+                    Ok(()) => {
+                        return Ok(DownloadOutcome::Written {
+                            path: path.to_path_buf(),
+                            bytes: payload.bytes,
+                            sha256: payload.sha256,
+                        })
+                    }
                     Err(e) => {
                         let _ = std::fs::remove_file(&tmp);
                         return Err(Error::Io(e));
@@ -248,9 +348,8 @@ pub async fn download_one(
         }
     }
 
-    Err(last_error.unwrap_or_else(|| {
-        Error::Download("download failed after maximum retry attempts".into())
-    }))
+    Err(last_error
+        .unwrap_or_else(|| Error::Download("download failed after maximum retry attempts".into())))
 }
 
 fn temp_path_for(path: &Path) -> PathBuf {
@@ -262,17 +361,24 @@ fn temp_path_for(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
+struct StreamPayload {
+    bytes: u64,
+    sha256: String,
+}
+
 async fn write_stream(
     response: reqwest::Response,
     tmp: &Path,
     total: u64,
+    max_bytes: u64,
     cancel: &CancellationToken,
     progress: &mut Option<ProgressFn>,
-) -> Result<u64> {
+) -> Result<StreamPayload> {
     use tokio::io::AsyncWriteExt;
 
     let mut file = tokio::fs::File::create(tmp).await?;
     let mut written: u64 = 0;
+    let mut hasher = Sha256::new();
     let mut stream = response.bytes_stream();
 
     loop {
@@ -286,11 +392,12 @@ async fn write_stream(
             }
         };
         written += chunk.len() as u64;
-        if written > MAX_FILE_BYTES {
+        if written > max_bytes {
             return Err(Error::Download(
                 "file exceeded size limit mid-download".into(),
             ));
         }
+        hasher.update(&chunk);
         file.write_all(&chunk).await?;
         if let Some(cb) = progress.as_mut() {
             cb(written, total);
@@ -299,7 +406,11 @@ async fn write_stream(
 
     file.flush().await?;
     file.sync_all().await?;
-    Ok(written)
+    let sha256 = format!("{:x}", hasher.finalize());
+    Ok(StreamPayload {
+        bytes: written,
+        sha256,
+    })
 }
 
 #[cfg(test)]
@@ -402,6 +513,39 @@ mod tests {
         assert!(out_path.exists(), "target file should be written");
         let content = std::fs::read_to_string(&out_path).unwrap();
         assert_eq!(content, "<svg><circle r='10'/></svg>");
+        match res.unwrap() {
+            DownloadOutcome::Written { sha256, bytes, .. } => {
+                assert_eq!(bytes, content.len() as u64);
+                assert!(!sha256.is_empty());
+            }
+            DownloadOutcome::Skipped => panic!("expected written outcome"),
+        }
+    }
+
+    #[test]
+    fn validate_svg_content_accepts_valid_svgs() {
+        assert!(validate_svg_content(b"<svg viewBox='0 0 10 10'><circle r='5'/></svg>").is_ok());
+        assert!(validate_svg_content(b"<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg'><path d='M0 0h10v10H0z'/></svg>").is_ok());
+        assert!(
+            validate_svg_content(b"<!-- comment --><svg><rect width='10' height='10'/></svg>")
+                .is_ok()
+        );
+        assert!(validate_svg_content(b"<svg width='10' height='10'/>").is_ok());
+    }
+
+    #[test]
+    fn validate_svg_content_rejects_invalid_content() {
+        // Empty
+        assert!(validate_svg_content(b"").is_err());
+        // Too short
+        assert!(validate_svg_content(b"<svg>").is_err());
+        // HTML error page
+        assert!(
+            validate_svg_content(b"<!DOCTYPE html><html><body>Error 404</body></html>").is_err()
+        );
+        // Binary with null bytes
+        assert!(validate_svg_content(&[0x89, 0x50, 0x4E, 0x47, 0x00, 0x0D, 0x0A, 0x1A]).is_err());
+        // Truncated (no closing tag)
+        assert!(validate_svg_content(b"<svg><path d='M 0 0").is_err());
     }
 }
-

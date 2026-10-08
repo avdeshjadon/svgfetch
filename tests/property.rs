@@ -1,9 +1,9 @@
 //! Property-based tests for the security-critical filename/text paths.
 
+use proptest::prelude::*;
 use svgfetch::security::{
     has_control_chars, safe_join, sanitize_filename, sanitize_text, validate_https_url,
 };
-use proptest::prelude::*;
 
 /// Regression: truncating a long name could leave trailing Unicode
 /// whitespace (e.g. an en-quad) or dots behind, which the next sanitize

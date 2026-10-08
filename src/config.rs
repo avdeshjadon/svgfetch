@@ -17,6 +17,8 @@ pub const DEFAULT_CACHE_TTL_HOURS: u64 = 24;
 pub const DEFAULT_CACHE_MAX_MB: u64 = 100;
 /// Upper bound on a single API JSON response.
 pub const DEFAULT_MAX_RESPONSE_MB: u64 = 16;
+/// Default maximum download size per asset (100 MB).
+pub const DEFAULT_MAX_DOWNLOAD_MB: u64 = 100;
 
 /// On-disk configuration file shape (all fields optional).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -31,6 +33,8 @@ pub struct ConfigFile {
     pub animations: Option<bool>,
     pub min_request_interval_ms: Option<u64>,
     pub max_response_mb: Option<u64>,
+    pub max_download_mb: Option<u64>,
+    pub project_detection: Option<bool>,
     /// Contact string appended to the User-Agent (recommended for heavy use).
     pub contact: Option<String>,
 }
@@ -49,6 +53,8 @@ pub struct Settings {
     pub animations: bool,
     pub min_request_interval_ms: u64,
     pub max_response_mb: u64,
+    pub max_download_mb: u64,
+    pub project_detection: bool,
     pub contact: Option<String>,
     /// Skip bulk download confirmations (driven by `--yes`).
     pub assume_yes: bool,
@@ -69,6 +75,8 @@ impl Default for Settings {
             animations: true,
             min_request_interval_ms: DEFAULT_MIN_REQUEST_INTERVAL_MS,
             max_response_mb: DEFAULT_MAX_RESPONSE_MB,
+            max_download_mb: DEFAULT_MAX_DOWNLOAD_MB,
+            project_detection: true,
             contact: None,
             assume_yes: false,
         }
@@ -149,6 +157,12 @@ impl Settings {
         if let Some(mb) = file.max_response_mb {
             s.max_response_mb = mb.clamp(1, 1024);
         }
+        if let Some(mb) = file.max_download_mb {
+            s.max_download_mb = mb.clamp(1, 10_240);
+        }
+        if let Some(pd) = file.project_detection {
+            s.project_detection = pd;
+        }
         if let Some(c) = file.contact {
             s.contact = Some(security_sanitize_contact(&c));
         }
@@ -173,6 +187,8 @@ impl Settings {
             animations: Some(true),
             min_request_interval_ms: Some(DEFAULT_MIN_REQUEST_INTERVAL_MS),
             max_response_mb: Some(DEFAULT_MAX_RESPONSE_MB),
+            max_download_mb: Some(DEFAULT_MAX_DOWNLOAD_MB),
+            project_detection: Some(true),
             contact: None,
         };
         let body = toml::to_string_pretty(&example)?;
@@ -208,6 +224,11 @@ impl Settings {
         (self.max_response_mb as usize).saturating_mul(1024 * 1024)
     }
 
+    /// Maximum size in bytes permitted for a single downloaded asset.
+    pub fn max_download_bytes(&self) -> u64 {
+        self.max_download_mb.saturating_mul(1024 * 1024)
+    }
+
     /// Config as TOML, for `svgfetch config`.
     pub fn to_toml_string(&self) -> String {
         let file = ConfigFile {
@@ -220,6 +241,8 @@ impl Settings {
             animations: Some(self.animations),
             min_request_interval_ms: Some(self.min_request_interval_ms),
             max_response_mb: Some(self.max_response_mb),
+            max_download_mb: Some(self.max_download_mb),
+            project_detection: Some(self.project_detection),
             contact: self.contact.clone(),
         };
         toml::to_string_pretty(&file).unwrap_or_default()
@@ -274,6 +297,9 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.max_concurrency, 4);
         assert!(s.cache_enabled);
+        assert_eq!(s.max_download_mb, 100);
+        assert_eq!(s.max_download_bytes(), 100 * 1024 * 1024);
+        assert!(s.project_detection);
         assert!(s.user_agent().starts_with("svgfetch/"));
         assert!(s
             .user_agent()

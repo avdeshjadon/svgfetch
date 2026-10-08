@@ -19,11 +19,7 @@ const CARD_BG_B: u8 = 249;
 /// With half-blocks (▀), 1 character cell renders 2 vertical pixels (top & bottom).
 /// This provides crisp, high-density 24-bit TrueColor graphics on any terminal:
 /// Antigravity IDE, VS Code, Ghostty, iTerm2, macOS Terminal, Windows Terminal, etc.
-pub fn render_halfblocks(
-    bytes: &[u8],
-    max_cols: u16,
-    max_rows: u16,
-) -> Option<Vec<Line<'static>>> {
+pub fn render_halfblocks(bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<Vec<Line<'static>>> {
     // 1. Try rendering as SVG first (handles raw SVG from Wikimedia or disk)
     if let Some(lines) = render_svg(bytes, max_cols, max_rows) {
         return Some(lines);
@@ -61,10 +57,8 @@ fn render_svg(svg_bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<Vec<Line
         CARD_BG_R, CARD_BG_G, CARD_BG_B, 255,
     ));
 
-    let transform = resvg::tiny_skia::Transform::from_scale(
-        super_w as f32 / orig_w,
-        super_h as f32 / orig_h,
-    );
+    let transform =
+        resvg::tiny_skia::Transform::from_scale(super_w as f32 / orig_w, super_h as f32 / orig_h);
 
     resvg::render(&tree, transform, &mut pixmap.as_mut());
 
@@ -96,7 +90,12 @@ fn render_svg(svg_bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<Vec<Line
         }
     }
 
-    Some(pixels_to_halfblocks(&pixels, target_w, target_pixel_h, max_rows))
+    Some(pixels_to_halfblocks(
+        &pixels,
+        target_w,
+        target_pixel_h,
+        max_rows,
+    ))
 }
 
 fn render_raster(bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<Vec<Line<'static>>> {
@@ -139,7 +138,12 @@ fn render_raster(bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<Vec<Line<
         }
     }
 
-    Some(pixels_to_halfblocks(&pixels, target_w, target_pixel_h, max_rows))
+    Some(pixels_to_halfblocks(
+        &pixels,
+        target_w,
+        target_pixel_h,
+        max_rows,
+    ))
 }
 
 fn pixels_to_halfblocks(
@@ -148,7 +152,7 @@ fn pixels_to_halfblocks(
     pixel_height: u32,
     max_rows: u16,
 ) -> Vec<Line<'static>> {
-    let char_rows = (pixel_height + 1) / 2;
+    let char_rows = pixel_height.div_ceil(2);
     let vertical_pad = (max_rows as u32).saturating_sub(char_rows) / 2;
 
     let mut lines = Vec::with_capacity((char_rows + vertical_pad * 2) as usize);
@@ -164,11 +168,17 @@ fn pixels_to_halfblocks(
 
         for px in 0..width {
             let top_idx = (py_top * width + px) as usize;
-            let top = pixels.get(top_idx).copied().unwrap_or((CARD_BG_R, CARD_BG_G, CARD_BG_B, 255));
+            let top = pixels
+                .get(top_idx)
+                .copied()
+                .unwrap_or((CARD_BG_R, CARD_BG_G, CARD_BG_B, 255));
 
             let bot = if py_bot < pixel_height {
                 let bot_idx = (py_bot * width + px) as usize;
-                pixels.get(bot_idx).copied().unwrap_or((CARD_BG_R, CARD_BG_G, CARD_BG_B, 255))
+                pixels
+                    .get(bot_idx)
+                    .copied()
+                    .unwrap_or((CARD_BG_R, CARD_BG_G, CARD_BG_B, 255))
             } else {
                 (CARD_BG_R, CARD_BG_G, CARD_BG_B, 255)
             };

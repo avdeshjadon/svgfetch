@@ -344,7 +344,10 @@ mod tests {
             .iter()
             .map(|b| b.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(names, vec![format!("svgfetch{ext}"), format!("svg-fetch{ext}")]);
+        assert_eq!(
+            names,
+            vec![format!("svgfetch{ext}"), format!("svg-fetch{ext}")]
+        );
     }
 
     #[test]

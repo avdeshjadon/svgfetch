@@ -96,17 +96,39 @@ svgfetch
 | --- | --- |
 | `svgfetch <brand>` | Directly download a brand asset into the current project or folder |
 | `svgfetch` | Launch full interactive terminal interface |
+| `svgfetch info <asset>` | Inspect asset metadata (license, creator, dimensions, URL) without downloading |
 | `svgfetch search <query>` | Search Commons without interactive UI |
 | `svgfetch download <title>` | Download a specific file by name or title |
 | `svgfetch category <name>` | List and download SVGs from a Commons category |
 | `svgfetch batch <query>` | Search, download, and pack into a ZIP archive with attribution |
 | `svgfetch cache <status\|clear>` | Inspect or prune the response cache |
 | `svgfetch config <--init>` | View or generate default configuration |
-| `svgfetch doctor` | Run diagnostics on network, API endpoints, and configuration |
+| `svgfetch doctor` | Run diagnostics on environment, network, and configuration |
 | `svgfetch update` | Update binary in place to the latest release |
 | `svgfetch uninstall` | Cleanly remove configuration, cache, downloads, and binary |
 
+### Global Flags
+
+- `--dry-run`: Preview resolution and destination paths without writing any files or downloading assets.
+- `--refresh`: Bypass cache and re-fetch fresh metadata from Wikimedia Commons.
+- `--no-cache`: Completely disable cache lookups and storage for the command.
+- `--project`: Explicitly enable project-aware placement into frontend asset folders.
+- `--no-project`: Disable automatic project detection and use the default download directory.
+- `-v, --verbose` / `--debug`: Display verbose/diagnostic runtime output.
+
 ### CLI Examples
+
+Dry-run resolution without downloading:
+
+```sh
+svgfetch amazon --dry-run
+```
+
+Inspect asset metadata without downloading:
+
+```sh
+svgfetch info "File:GitHub_Logo.svg" --format json
+```
 
 Search and export results as JSON:
 
@@ -161,16 +183,23 @@ theme = "default"
 animations = true
 min_request_interval_ms = 250
 max_response_mb = 16
+max_download_mb = 100
+project_detection = true
 contact = "user@example.com"
 ```
 
 ---
 
-## Attribution and Licensing
+## Attribution, Provenance, and Licensing
 
-- Files downloaded from Wikimedia Commons retain their respective creator licenses (Creative Commons, Public Domain, etc.).
-- `svgfetch` writes author and license information into a `metadata/` directory or `ATTRIBUTION.md` alongside downloaded assets.
-- Requests respect Wikimedia API rate limits and back off upon receiving HTTP 429 responses.
+- Files downloaded from Wikimedia Commons retain their respective creator licenses (Creative Commons, Public Domain, etc.). SVGFetch dual-license (MIT / Apache-2.0) applies to the software itself, not to downloaded third-party assets.
+- `svgfetch` writes structured, verifiable provenance and attribution metadata alongside downloaded assets:
+  - `manifest.json`: Tool version, query, download timestamp, and file count.
+  - `attribution.json`: Author, creator, license, license URL, and download timestamp for each asset.
+  - `licenses.json`: Full license terms and URLs mapped to exact saved filenames.
+  - `sources.json`: Original Wikimedia Commons page and direct asset URLs.
+- Repeated downloads into the same folder merge metadata deterministically without destroying previous provenance entries.
+- Requests respect Wikimedia API guidelines, using descriptive User-Agents, rate limiting, and exponential backoff on HTTP 429/5xx responses.
 
 ---
 

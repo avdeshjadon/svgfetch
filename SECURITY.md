@@ -35,7 +35,11 @@ unless you ask to remain anonymous.
   filesystems.
 - **URL validation**: non-HTTPS or credential-smuggled redirects that leak or
   rewrite downloads.
-- **Response limits**: oversized API/download bodies, decompression bombs.
+- **Response limits**: oversized API/download bodies, streaming ceiling enforcement (`max_download_mb`), decompression bombs.
+- **Content validation**: malicious or corrupted non-SVG payloads (HTML error pages, PE/ELF executables, null-byte binaries).
+- **Atomic file operations**: temporary `.part` file streaming with atomic rename on validation to prevent corrupt or partial files on disk.
+- **Installer & update integrity**: release artifact SHA-256 verification before extracting archives in npm installer and self-updater.
+- **Archive safety (Zip Slip)**: sanitization of archive entry names preventing directory traversal upon decompression.
 - **Terminal injection**: ANSI/OSC escape sequences or control characters in
   titles/descriptions that could manipulate the TUI.
 - **Header smuggling**: the `contact` user-agent field introducing newlines or

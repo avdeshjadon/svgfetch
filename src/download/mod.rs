@@ -2,7 +2,9 @@
 
 pub mod file;
 
-pub use file::{download_one, unique_path, DownloadOutcome, NameAllocator};
+pub use file::{
+    download_one, download_one_with_limit, unique_path, DownloadOutcome, NameAllocator,
+};
 
 use std::path::PathBuf;
 use std::sync::Arc;

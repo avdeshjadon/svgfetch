@@ -16,6 +16,10 @@ use crate::security;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttributionEntry {
     pub filename: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_filename: Option<String>,
     pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_url: Option<String>,
@@ -25,6 +29,10 @@ pub struct AttributionEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license_url: Option<String>,
     pub downloaded_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_file_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,6 +49,10 @@ pub struct AttributionEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LicenseEntry {
     pub filename: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_filename: Option<String>,
     pub license: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license_url: Option<String>,
@@ -53,6 +65,10 @@ pub struct LicenseEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceEntry {
     pub filename: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_filename: Option<String>,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_url: Option<String>,
@@ -78,6 +94,15 @@ source page before reuse. svgfetch does not own or license any Wikimedia content
 
 impl AttributionEntry {
     pub fn for_asset(asset: &Asset) -> AttributionEntry {
+        Self::for_asset_with_details(asset, None, None, None)
+    }
+
+    pub fn for_asset_with_details(
+        asset: &Asset,
+        saved_filename: Option<&str>,
+        sha256: Option<&str>,
+        size_bytes: Option<u64>,
+    ) -> AttributionEntry {
         let license = asset.license_or_unknown();
         let note = if asset.license.is_none() {
             Some(
@@ -91,14 +116,23 @@ Verify licensing on the Wikimedia Commons page before reuse."
             None
         };
 
+        let saved = saved_filename.map(str::to_string);
+        let eff_filename = saved
+            .clone()
+            .unwrap_or_else(|| security::sanitize_filename(&asset.file_name));
+
         AttributionEntry {
-            filename: security::sanitize_filename(&asset.file_name),
+            filename: eff_filename,
+            saved_filename: saved,
+            source_filename: Some(asset.original_name.clone()),
             source: "Wikimedia Commons".to_string(),
             source_url: asset.description_url.clone(),
             author: asset.author.clone(),
             license,
             license_url: asset.license_url.clone(),
             downloaded_at: Utc::now().to_rfc3339(),
+            sha256: sha256.map(str::to_string),
+            size_bytes: size_bytes.or(asset.size_bytes),
             original_file_url: asset.url.clone(),
             title: Some(asset.title.clone()),
             attribution_text: asset.attribution.clone(),
@@ -108,9 +142,15 @@ Verify licensing on the Wikimedia Commons page before reuse."
     }
 }
 
-fn license_entry(asset: &Asset) -> LicenseEntry {
+fn license_entry(asset: &Asset, saved_name: Option<&str>) -> LicenseEntry {
+    let saved = saved_name.map(str::to_string);
+    let eff_filename = saved
+        .clone()
+        .unwrap_or_else(|| security::sanitize_filename(&asset.file_name));
     LicenseEntry {
-        filename: security::sanitize_filename(&asset.file_name),
+        filename: eff_filename,
+        saved_filename: saved,
+        source_filename: Some(asset.original_name.clone()),
         license: asset.license_or_unknown(),
         license_url: asset.license_url.clone(),
         usage_terms: asset.usage_terms.clone(),
@@ -118,9 +158,15 @@ fn license_entry(asset: &Asset) -> LicenseEntry {
     }
 }
 
-fn source_entry(asset: &Asset) -> SourceEntry {
+fn source_entry(asset: &Asset, saved_name: Option<&str>) -> SourceEntry {
+    let saved = saved_name.map(str::to_string);
+    let eff_filename = saved
+        .clone()
+        .unwrap_or_else(|| security::sanitize_filename(&asset.file_name));
     SourceEntry {
-        filename: security::sanitize_filename(&asset.file_name),
+        filename: eff_filename,
+        saved_filename: saved,
+        source_filename: Some(asset.original_name.clone()),
         title: asset.title.clone(),
         page_url: asset.description_url.clone(),
         original_file_url: asset.url.clone(),
@@ -132,8 +178,8 @@ fn source_entry(asset: &Asset) -> SourceEntry {
 pub fn metadata_documents(query: &str, assets: &[Asset]) -> Vec<(String, String)> {
     let attribution: Vec<AttributionEntry> =
         assets.iter().map(AttributionEntry::for_asset).collect();
-    let licenses: Vec<LicenseEntry> = assets.iter().map(license_entry).collect();
-    let sources: Vec<SourceEntry> = assets.iter().map(source_entry).collect();
+    let licenses: Vec<LicenseEntry> = assets.iter().map(|a| license_entry(a, None)).collect();
+    let sources: Vec<SourceEntry> = assets.iter().map(|a| source_entry(a, None)).collect();
     let manifest = Manifest {
         tool: "svgfetch".to_string(),
         version: crate::VERSION.to_string(),
@@ -163,13 +209,27 @@ pub fn metadata_documents(query: &str, assets: &[Asset]) -> Vec<(String, String)
     ]
 }
 
-/// Write attribution files into `dir`, merging with any existing
-/// `attribution.json` so repeated batches never drop earlier records.
+/// Write attribution files into `dir`, merging with existing metadata files
+/// so repeated downloads never drop earlier records.
 pub fn write_metadata_dir(dir: &Path, query: &str, assets: &[Asset]) -> Result<Vec<PathBuf>> {
+    let records: Vec<(Asset, Option<String>, Option<u64>)> = assets
+        .iter()
+        .map(|a| (a.clone(), None, a.size_bytes))
+        .collect();
+    write_metadata_records(dir, query, &records)
+}
+
+/// Detailed metadata writer supporting exact saved filename, SHA-256 and byte sizes.
+pub fn write_metadata_records(
+    dir: &Path,
+    query: &str,
+    records: &[(Asset, Option<String>, Option<u64>)],
+) -> Result<Vec<PathBuf>> {
     std::fs::create_dir_all(dir)?;
 
+    // 1. Attribution merge
     let attr_path = dir.join("attribution.json");
-    let mut merged: Vec<AttributionEntry> = if attr_path.exists() {
+    let mut merged_attr: Vec<AttributionEntry> = if attr_path.exists() {
         std::fs::read_to_string(&attr_path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
@@ -177,27 +237,65 @@ pub fn write_metadata_dir(dir: &Path, query: &str, assets: &[Asset]) -> Result<V
     } else {
         Vec::new()
     };
-
-    let new_entries: Vec<AttributionEntry> =
-        assets.iter().map(AttributionEntry::for_asset).collect();
-    for entry in &new_entries {
-        merged.retain(|e| e.filename != entry.filename);
-        merged.push(entry.clone());
+    for (asset, sha, bytes) in records {
+        let entry = AttributionEntry::for_asset_with_details(
+            asset,
+            Some(&asset.file_name),
+            sha.as_deref(),
+            *bytes,
+        );
+        merged_attr.retain(|e| e.filename != entry.filename);
+        merged_attr.push(entry);
     }
+    std::fs::write(&attr_path, serde_json::to_string_pretty(&merged_attr)?)?;
 
-    let mut written = Vec::new();
-    std::fs::write(&attr_path, serde_json::to_string_pretty(&merged)?)?;
-    written.push(attr_path);
-
-    for (name, body) in metadata_documents(query, assets) {
-        if name == "attribution.json" {
-            continue; // handled with merge semantics above
-        }
-        let path = dir.join(&name);
-        std::fs::write(&path, body)?;
-        written.push(path);
+    // 2. Licenses merge
+    let lic_path = dir.join("licenses.json");
+    let mut merged_lic: Vec<LicenseEntry> = if lic_path.exists() {
+        std::fs::read_to_string(&lic_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    for (asset, _, _) in records {
+        let entry = license_entry(asset, Some(&asset.file_name));
+        merged_lic.retain(|e| e.filename != entry.filename);
+        merged_lic.push(entry);
     }
-    Ok(written)
+    std::fs::write(&lic_path, serde_json::to_string_pretty(&merged_lic)?)?;
+
+    // 3. Sources merge
+    let src_path = dir.join("sources.json");
+    let mut merged_src: Vec<SourceEntry> = if src_path.exists() {
+        std::fs::read_to_string(&src_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    for (asset, _, _) in records {
+        let entry = source_entry(asset, Some(&asset.file_name));
+        merged_src.retain(|e| e.filename != entry.filename);
+        merged_src.push(entry);
+    }
+    std::fs::write(&src_path, serde_json::to_string_pretty(&merged_src)?)?;
+
+    // 4. Manifest update
+    let manifest_path = dir.join("manifest.json");
+    let manifest = Manifest {
+        tool: "svgfetch".to_string(),
+        version: crate::VERSION.to_string(),
+        query: query.to_string(),
+        created_at: Utc::now().to_rfc3339(),
+        file_count: merged_attr.len(),
+        note: MANIFEST_NOTE.to_string(),
+    };
+    std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+
+    Ok(vec![attr_path, lic_path, src_path, manifest_path])
 }
 
 #[cfg(test)]
@@ -276,14 +374,37 @@ mod tests {
             &[asset("a.svg", Some("CC0")), asset("b.svg", None)],
         )
         .unwrap();
-        let raw = std::fs::read_to_string(dir.path().join("attribution.json")).unwrap();
-        let entries: Vec<AttributionEntry> = serde_json::from_str(&raw).unwrap();
+        let raw_attr = std::fs::read_to_string(dir.path().join("attribution.json")).unwrap();
+        let entries: Vec<AttributionEntry> = serde_json::from_str(&raw_attr).unwrap();
         assert_eq!(
             entries.len(),
             2,
             "duplicates must be replaced, not appended"
         );
-        assert!(dir.path().join("licenses.json").exists());
+        let raw_lic = std::fs::read_to_string(dir.path().join("licenses.json")).unwrap();
+        let lics: Vec<LicenseEntry> = serde_json::from_str(&raw_lic).unwrap();
+        assert_eq!(lics.len(), 2, "licenses must merge without loss");
+
+        let raw_src = std::fs::read_to_string(dir.path().join("sources.json")).unwrap();
+        let srcs: Vec<SourceEntry> = serde_json::from_str(&raw_src).unwrap();
+        assert_eq!(srcs.len(), 2, "sources must merge without loss");
+
         assert!(dir.path().join("manifest.json").exists());
+    }
+
+    #[test]
+    fn attribution_records_saved_and_source_filenames() {
+        let a = asset("SourceLogo.svg", Some("CC0"));
+        let entry = AttributionEntry::for_asset_with_details(
+            &a,
+            Some("TargetLogo-1.svg"),
+            Some("abcdef123456"),
+            Some(1024),
+        );
+        assert_eq!(entry.filename, "TargetLogo-1.svg");
+        assert_eq!(entry.saved_filename.as_deref(), Some("TargetLogo-1.svg"));
+        assert_eq!(entry.source_filename.as_deref(), Some("SourceLogo.svg"));
+        assert_eq!(entry.sha256.as_deref(), Some("abcdef123456"));
+        assert_eq!(entry.size_bytes, Some(1024));
     }
 }

@@ -13,8 +13,71 @@ pub struct FetchedPage {
     pub from_cache: bool,
 }
 
-/// Cache key for a query/offset pair.
-fn cache_key(query: &str, offset: u64) -> String {
+/// Confidence level for a search result match.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+pub enum MatchConfidence {
+    Low,
+    Medium,
+    High,
+}
+
+impl MatchConfidence {
+    pub fn label(&self) -> &'static str {
+        match self {
+            MatchConfidence::High => "High",
+            MatchConfidence::Medium => "Medium",
+            MatchConfidence::Low => "Low",
+        }
+    }
+}
+
+/// Compute a deterministic relevance and confidence score for a candidate asset against a query.
+pub fn score_asset_match(query: &str, asset: &crate::models::Asset) -> (u32, MatchConfidence) {
+    let q_norm = crate::brands::normalize(query);
+    let title_clean = asset
+        .original_name
+        .trim_end_matches(".svg")
+        .trim_end_matches(".SVG");
+    let t_norm = crate::brands::normalize(title_clean);
+
+    let mut score = 0u32;
+    // 1. Exact normalized match
+    if t_norm == q_norm {
+        score += 100;
+    } else if t_norm.starts_with(&q_norm) {
+        // 2. Prefix match (e.g. "amazon" -> "amazon logo")
+        score += 60;
+    } else if t_norm.contains(&q_norm) {
+        // 3. Substring match
+        score += 40;
+    }
+
+    // 4. Token overlap
+    let q_tokens: std::collections::HashSet<_> = q_norm.split_whitespace().collect();
+    let t_tokens: std::collections::HashSet<_> = t_norm.split_whitespace().collect();
+    let overlap = q_tokens.intersection(&t_tokens).count();
+    score += (overlap as u32) * 15;
+
+    // 5. SVG mime confirmation bonus
+    if asset.mime.as_deref() == Some("image/svg+xml") {
+        score += 10;
+    }
+
+    let confidence = if score >= 75 {
+        MatchConfidence::High
+    } else if score >= 35 {
+        MatchConfidence::Medium
+    } else {
+        MatchConfidence::Low
+    };
+
+    (score, confidence)
+}
+
+/// Cache key for a query/offset/limit triple.
+pub fn cache_key(query: &str, offset: u64, limit: u32) -> String {
     // Normalize the *effective* search string (title-boost etc.) into the key
     // so that changing ranking semantics busts stale cache entries instead of
     // silently serving old results.
@@ -28,7 +91,7 @@ fn cache_key(query: &str, offset: u64) -> String {
         boost.as_str()
     };
     let joined = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
-    format!("{joined}@{offset}")
+    format!("{joined}@{offset}:{limit}")
 }
 
 /// Fetch one page of results, reading from cache first when enabled.
@@ -39,12 +102,26 @@ pub async fn fetch_page<P: AssetProvider>(
     offset: u64,
     limit: u32,
 ) -> Result<FetchedPage> {
-    let key = cache_key(query, offset);
-    if let Some(page) = cache.get::<SearchPage>(NS_SEARCH, &key) {
-        return Ok(FetchedPage {
-            page,
-            from_cache: true,
-        });
+    fetch_page_opts(provider, cache, query, offset, limit, false).await
+}
+
+/// Fetch one page of results with explicit cache bypass option.
+pub async fn fetch_page_opts<P: AssetProvider>(
+    provider: &P,
+    cache: &Cache,
+    query: &str,
+    offset: u64,
+    limit: u32,
+    bypass_cache: bool,
+) -> Result<FetchedPage> {
+    let key = cache_key(query, offset, limit);
+    if !bypass_cache {
+        if let Some(page) = cache.get::<SearchPage>(NS_SEARCH, &key) {
+            return Ok(FetchedPage {
+                page,
+                from_cache: true,
+            });
+        }
     }
     let page = provider.search(query, offset, limit).await?;
     cache.put(NS_SEARCH, &key, &page);
@@ -54,7 +131,7 @@ pub async fn fetch_page<P: AssetProvider>(
     })
 }
 
-/// Ignore the cache and force a network fetch (for `r` = refresh).
+/// Ignore the cache and force a network fetch (for `r` = refresh or `--refresh`).
 pub async fn fetch_page_fresh<P: AssetProvider>(
     provider: &P,
     cache: &Cache,
@@ -62,12 +139,7 @@ pub async fn fetch_page_fresh<P: AssetProvider>(
     offset: u64,
     limit: u32,
 ) -> Result<FetchedPage> {
-    let page = provider.search(query, offset, limit).await?;
-    cache.put(NS_SEARCH, &cache_key(query, offset), &page);
-    Ok(FetchedPage {
-        page,
-        from_cache: false,
-    })
+    fetch_page_opts(provider, cache, query, offset, limit, true).await
 }
 
 /// Collect up to `limit` assets across as many pages as needed.
@@ -197,6 +269,30 @@ mod tests {
 
     #[test]
     fn cache_key_is_normalized() {
-        assert_eq!(cache_key(" GitHub ", 0), cache_key("github", 0));
+        assert_eq!(cache_key(" GitHub ", 0, 25), cache_key("github", 0, 25));
+    }
+
+    #[test]
+    fn cache_key_incorporates_limit_and_offset() {
+        assert_ne!(cache_key("github", 0, 25), cache_key("github", 0, 50));
+        assert_ne!(cache_key("github", 0, 25), cache_key("github", 25, 25));
+    }
+
+    #[test]
+    fn score_asset_match_evaluates_confidence() {
+        let mut exact = asset("Amazon_logo.svg", None);
+        exact.mime = Some("image/svg+xml".into());
+        let (score_exact, conf_exact) = score_asset_match("amazon", &exact);
+        assert!(score_exact >= 75);
+        assert_eq!(conf_exact, MatchConfidence::High);
+
+        let mut prefix = asset("Amazon_Prime_video.svg", None);
+        prefix.mime = Some("image/svg+xml".into());
+        let (_, conf_prefix) = score_asset_match("amazon", &prefix);
+        assert!(conf_prefix >= MatchConfidence::Medium);
+
+        let unrelated = asset("Completely_Unrelated_Image.svg", None);
+        let (_, conf_unrelated) = score_asset_match("amazon", &unrelated);
+        assert_eq!(conf_unrelated, MatchConfidence::Low);
     }
 }

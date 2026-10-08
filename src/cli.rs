@@ -31,6 +31,26 @@ pub struct Cli {
     #[arg(long)]
     pub overwrite: bool,
 
+    /// Perform a dry run showing what would be done without modifying files or downloading.
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+
+    /// Force refresh cached data.
+    #[arg(long, global = true)]
+    pub refresh: bool,
+
+    /// Disable cache reads and writes.
+    #[arg(long, global = true)]
+    pub no_cache: bool,
+
+    /// Explicitly enable project-aware placement.
+    #[arg(long, global = true, conflicts_with = "no_project")]
+    pub project: bool,
+
+    /// Disable automatic project-aware placement.
+    #[arg(long, global = true, conflicts_with = "project")]
+    pub no_project: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 
@@ -205,6 +225,16 @@ pub enum Command {
     /// and removes old binaries and leftover `.old` files. Uses the GitHub
     /// releases API pointed at this project unless `SVGFETCH_UPDATE_REPO` is set.
     Update,
+
+    /// Display detailed metadata for an SVG asset without downloading.
+    Info {
+        /// File name, MediaWiki title, or query (e.g. `File:GitHub_Logo.svg`, `amazon`, or `github.svg`).
+        asset: String,
+
+        /// Output format.
+        #[arg(long, short = 'f', value_enum, default_value_t = crate::output::OutputFormat::Table)]
+        format: crate::output::OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -288,13 +318,19 @@ mod tests {
     #[test]
     fn parses_dlt_with_yes() {
         let cli = Cli::parse_from(["svgfetch", "dlt", "--yes"]);
-        assert!(matches!(cli.command, Some(Command::Uninstall { yes: true })));
+        assert!(matches!(
+            cli.command,
+            Some(Command::Uninstall { yes: true })
+        ));
     }
 
     #[test]
     fn parses_uninstall_with_yes() {
         let cli = Cli::parse_from(["svgfetch", "uninstall", "--yes"]);
-        assert!(matches!(cli.command, Some(Command::Uninstall { yes: true })));
+        assert!(matches!(
+            cli.command,
+            Some(Command::Uninstall { yes: true })
+        ));
     }
 
     #[test]
@@ -309,5 +345,33 @@ mod tests {
         let cli = Cli::parse_from(["svgfetch", "amazon", "prime"]);
         assert!(cli.command.is_none());
         assert_eq!(cli.brand, vec!["amazon", "prime"]);
+    }
+
+    #[test]
+    fn parses_dry_run_and_cache_flags() {
+        let cli = Cli::parse_from([
+            "svgfetch",
+            "--dry-run",
+            "--refresh",
+            "--no-project",
+            "amazon",
+        ]);
+        assert!(cli.dry_run);
+        assert!(cli.refresh);
+        assert!(cli.no_project);
+        assert!(!cli.project);
+        assert_eq!(cli.brand, vec!["amazon"]);
+    }
+
+    #[test]
+    fn parses_info_command() {
+        let cli = Cli::parse_from(["svgfetch", "info", "File:GitHub_Logo.svg", "-f", "json"]);
+        match cli.command {
+            Some(Command::Info { asset, format }) => {
+                assert_eq!(asset, "File:GitHub_Logo.svg");
+                assert_eq!(format, crate::output::OutputFormat::Json);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
     }
 }

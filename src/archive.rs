@@ -105,12 +105,16 @@ pub async fn create_zip(
             }
             let res = crate::download::file::download_one(client, &url, &path, &cancel, None).await;
             match res {
-                Ok(crate::download::DownloadOutcome::Written { path, .. }) => {
-                    (orig_name, Ok((security::sanitize_filename(&file_name), path)))
-                }
+                Ok(crate::download::DownloadOutcome::Written { path, .. }) => (
+                    orig_name,
+                    Ok((security::sanitize_filename(&file_name), path)),
+                ),
                 Ok(crate::download::DownloadOutcome::Skipped) => {
                     if path.exists() {
-                        (orig_name, Ok((security::sanitize_filename(&file_name), path)))
+                        (
+                            orig_name,
+                            Ok((security::sanitize_filename(&file_name), path)),
+                        )
                     } else {
                         (orig_name, Err(Error::Download("file was skipped".into())))
                     }
@@ -207,6 +211,58 @@ pub async fn create_zip(
                 path: zip_path_owned,
                 files: files_count,
                 bytes: size,
+            })
+        }
+        Ok(Err(e)) => {
+            let _ = std::fs::remove_file(&tmp_path);
+            Err(e)
+        }
+        Err(_) => {
+            let _ = std::fs::remove_file(&tmp_path);
+            Err(Error::Other("zip packing task failed".into()))
+        }
+    }
+}
+
+/// Create a ZIP archive from already-downloaded local files, avoiding redundant network downloads.
+pub async fn create_zip_from_local_files(
+    zip_path: &Path,
+    root_name: &str,
+    query: &str,
+    assets: &[Asset],
+    files: &[(String, PathBuf)],
+) -> Result<ZipReport> {
+    if files.is_empty() {
+        return Err(Error::Other("no downloaded files to archive".into()));
+    }
+    if let Some(parent) = zip_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let root = security::sanitize_filename(root_name);
+    let meta_docs = metadata::metadata_documents(query, assets);
+    let tmp_path = zip_path.with_extension("zip.part");
+    let tmp_for_thread = tmp_path.clone();
+    let zip_path_owned = zip_path.to_path_buf();
+    let root_for_thread = root.clone();
+    let files_owned: Vec<(String, PathBuf)> = files.to_vec();
+    let files_count = files_owned.len();
+
+    let pack = tokio::task::spawn_blocking(move || {
+        pack_zip(&tmp_for_thread, &files_owned, &meta_docs, &root_for_thread)
+    })
+    .await;
+
+    match pack {
+        Ok(Ok(bytes)) => {
+            if let Err(e) = std::fs::rename(&tmp_path, &zip_path_owned) {
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(Error::Io(e));
+            }
+            Ok(ZipReport {
+                path: zip_path_owned,
+                files: files_count,
+                bytes,
             })
         }
         Ok(Err(e)) => {

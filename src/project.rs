@@ -1,7 +1,7 @@
 //! Smart frontend and web project detection for contextual downloads.
 
-use std::path::{Path, PathBuf};
 use serde_json::Value;
+use std::path::{Path, PathBuf};
 
 /// Web/frontend framework or runtime environment detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +58,10 @@ pub fn find_project_context() -> Option<ProjectContext> {
 }
 
 /// Detect project context from a specified directory, respecting home dir boundary.
-pub fn find_project_context_from(start_dir: &Path, home_dir: Option<&Path>) -> Option<ProjectContext> {
+pub fn find_project_context_from(
+    start_dir: &Path,
+    home_dir: Option<&Path>,
+) -> Option<ProjectContext> {
     // If running directly in home/root directory (e.g. ~, /Users/username),
     // do not treat as a project folder.
     if let Some(home) = home_dir {
@@ -101,12 +104,12 @@ fn inspect_directory(dir: &Path) -> Option<ProjectContext> {
     let has_vite_config = dir.join("vite.config.js").exists()
         || dir.join("vite.config.ts").exists()
         || dir.join("vite.config.mjs").exists();
-    let has_nuxt_config = dir.join("nuxt.config.js").exists()
-        || dir.join("nuxt.config.ts").exists();
-    let has_astro_config = dir.join("astro.config.mjs").exists()
-        || dir.join("astro.config.ts").exists();
-    let has_svelte_config = dir.join("svelte.config.js").exists()
-        || dir.join("svelte.config.ts").exists();
+    let has_nuxt_config =
+        dir.join("nuxt.config.js").exists() || dir.join("nuxt.config.ts").exists();
+    let has_astro_config =
+        dir.join("astro.config.mjs").exists() || dir.join("astro.config.ts").exists();
+    let has_svelte_config =
+        dir.join("svelte.config.js").exists() || dir.join("svelte.config.ts").exists();
 
     if !has_pkg_json
         && !has_next_config
@@ -119,7 +122,14 @@ fn inspect_directory(dir: &Path) -> Option<ProjectContext> {
     }
 
     let kind = if let Ok(content) = std::fs::read_to_string(&pkg_json_path) {
-        detect_framework_from_package_json(&content, has_next_config, has_vite_config, has_nuxt_config, has_astro_config, has_svelte_config)
+        detect_framework_from_package_json(
+            &content,
+            has_next_config,
+            has_vite_config,
+            has_nuxt_config,
+            has_astro_config,
+            has_svelte_config,
+        )
     } else if has_next_config {
         ProjectKind::NextJs
     } else if has_nuxt_config {
@@ -154,12 +164,8 @@ fn detect_framework_from_package_json(
 ) -> ProjectKind {
     if let Ok(v) = serde_json::from_str::<Value>(content) {
         let has_dep = |name: &str| -> bool {
-            v.get("dependencies")
-                .and_then(|d| d.get(name))
-                .is_some()
-                || v.get("devDependencies")
-                    .and_then(|d| d.get(name))
-                    .is_some()
+            v.get("dependencies").and_then(|d| d.get(name)).is_some()
+                || v.get("devDependencies").and_then(|d| d.get(name)).is_some()
                 || v.get("peerDependencies")
                     .and_then(|d| d.get(name))
                     .is_some()
@@ -272,7 +278,11 @@ mod tests {
         let temp = tempdir().unwrap();
         let home = temp.path().join("userhome");
         std::fs::create_dir_all(&home).unwrap();
-        std::fs::write(home.join("package.json"), r#"{"dependencies":{"react":"^18.0.0"}}"#).unwrap();
+        std::fs::write(
+            home.join("package.json"),
+            r#"{"dependencies":{"react":"^18.0.0"}}"#,
+        )
+        .unwrap();
 
         let ctx = find_project_context_from(&home, Some(&home));
         assert!(ctx.is_none());
@@ -285,7 +295,11 @@ mod tests {
         let proj = home.join("my-react-app");
         let src = proj.join("src");
         std::fs::create_dir_all(&src).unwrap();
-        std::fs::write(proj.join("package.json"), r#"{"dependencies":{"react":"^18.0.0"}}"#).unwrap();
+        std::fs::write(
+            proj.join("package.json"),
+            r#"{"dependencies":{"react":"^18.0.0"}}"#,
+        )
+        .unwrap();
 
         let ctx = find_project_context_from(&proj, Some(&home)).expect("should detect");
         assert_eq!(ctx.kind, ProjectKind::React);
@@ -299,7 +313,11 @@ mod tests {
         let proj = home.join("my-portfolio");
         let public_images = proj.join("public").join("images");
         std::fs::create_dir_all(&public_images).unwrap();
-        std::fs::write(proj.join("package.json"), r#"{"dependencies":{"next":"14.0.0"}}"#).unwrap();
+        std::fs::write(
+            proj.join("package.json"),
+            r#"{"dependencies":{"next":"14.0.0"}}"#,
+        )
+        .unwrap();
 
         let ctx = find_project_context_from(&proj, Some(&home)).expect("should detect");
         assert_eq!(ctx.kind, ProjectKind::NextJs);
@@ -314,7 +332,11 @@ mod tests {
         let nested = proj.join("components").join("sections").join("Experience");
         std::fs::create_dir_all(&nested).unwrap();
         std::fs::create_dir_all(proj.join("src")).unwrap();
-        std::fs::write(proj.join("package.json"), r#"{"dependencies":{"vue":"^3.0.0"}}"#).unwrap();
+        std::fs::write(
+            proj.join("package.json"),
+            r#"{"dependencies":{"vue":"^3.0.0"}}"#,
+        )
+        .unwrap();
 
         let ctx = find_project_context_from(&nested, Some(&home)).expect("should find root");
         assert_eq!(ctx.kind, ProjectKind::Vue);

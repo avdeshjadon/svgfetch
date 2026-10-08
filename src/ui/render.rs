@@ -42,11 +42,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     let (body, footer_area) = match app.screen {
         Screen::SearchInput => {
-            let layout = Layout::vertical([
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(area);
+            let layout = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(area);
             (layout[0], layout[1])
         }
         _ => {
@@ -292,7 +288,10 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
         Span::styled("GitHub", t.accent_style()),
         Span::styled(", or ", t.text_style()),
         Span::styled("React", t.accent_style()),
-        Span::styled(" and press Enter. All matching SVG icons will be shown.", t.text_style()),
+        Span::styled(
+            " and press Enter. All matching SVG icons will be shown.",
+            t.text_style(),
+        ),
     ]);
     f.render_widget(hint, hint_chunk);
 }
@@ -450,7 +449,10 @@ fn draw_results(f: &mut Frame, area: Rect, app: &App) {
     }
     items.push(ListItem::new(Line::from(vec![
         Span::raw("     "),
-        Span::styled("⬇ Download all files as complete ZIP (or press 'z')", t.bold_accent()),
+        Span::styled(
+            "⬇ Download all files as complete ZIP (or press 'z')",
+            t.bold_accent(),
+        ),
     ])));
 
     let list = List::new(items)
@@ -515,18 +517,17 @@ fn draw_details(f: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
-    let chunks = Layout::vertical([
-        Constraint::Min(0),
-        Constraint::Length(7),
-    ])
-    .split(area);
+    let chunks = Layout::vertical([Constraint::Min(0), Constraint::Length(7)]).split(area);
 
     let mut lines = Vec::new();
     let label = |k: &str| Span::styled(format!("{:<20}", k), t.bold_accent());
 
     lines.push(Line::from(vec![
         label("File Name:"),
-        Span::styled(security::sanitize_text(&asset.original_name), t.title_style()),
+        Span::styled(
+            security::sanitize_text(&asset.original_name),
+            t.title_style(),
+        ),
     ]));
     lines.push(Line::default());
 
@@ -609,7 +610,10 @@ fn draw_details(f: &mut Frame, area: Rect, app: &App) {
     lines.push(Line::default());
     lines.push(Line::from(vec![
         label("Interactive View:"),
-        Span::styled("Press [V] or [Space] to open in dedicated Vector Window (Retina / Zoomable)", t.bold_accent()),
+        Span::styled(
+            "Press [V] or [Space] to open in dedicated Vector Window (Retina / Zoomable)",
+            t.bold_accent(),
+        ),
     ]));
 
     let detail_block = Block::bordered()
@@ -662,12 +666,9 @@ fn draw_details(f: &mut Frame, area: Rect, app: &App) {
         ])
         .alignment(Alignment::Center),
     ];
-    let action_p = Paragraph::new(action_text)
-        .block(action_block);
+    let action_p = Paragraph::new(action_text).block(action_block);
     f.render_widget(action_p, chunks[1]);
 }
-
-
 
 fn draw_downloading(f: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;

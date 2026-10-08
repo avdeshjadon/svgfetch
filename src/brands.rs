@@ -1,8 +1,8 @@
 //! Curated brand registry and resolution for direct, single-logo downloads.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BrandInfo {
@@ -61,7 +61,7 @@ impl BrandRegistry {
         }
 
         // 2. Check aliases across all brands
-        for (_, brand) in &self.brands {
+        for brand in self.brands.values() {
             for alias in &brand.aliases {
                 if normalize(alias) == norm {
                     return Some(brand);
@@ -70,13 +70,9 @@ impl BrandRegistry {
         }
 
         // 3. Normalized brand name match
-        for (_, brand) in &self.brands {
-            if normalize(&brand.name) == norm {
-                return Some(brand);
-            }
-        }
-
-        None
+        self.brands
+            .values()
+            .find(|brand| normalize(&brand.name) == norm)
     }
 }
 
@@ -97,7 +93,7 @@ pub fn slugify(name: &str) -> String {
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect();
-    
+
     // Collapse consecutive dashes
     let mut out = String::new();
     let mut prev_dash = false;
@@ -139,24 +135,32 @@ mod tests {
     #[test]
     fn test_registry_resolves_amazon_prime() {
         let reg = BrandRegistry::load();
-        let prime = reg.resolve("amazon prime").expect("amazon prime should resolve");
+        let prime = reg
+            .resolve("amazon prime")
+            .expect("amazon prime should resolve");
         assert_eq!(prime.name, "Amazon Prime");
         assert_eq!(prime.file, "File:Amazon Prime Logo.svg");
 
         // Alias test
-        let prime_alias = reg.resolve("prime video").expect("prime video should resolve");
+        let prime_alias = reg
+            .resolve("prime video")
+            .expect("prime video should resolve");
         assert_eq!(prime_alias.name, "Amazon Prime");
     }
 
     #[test]
     fn test_registry_resolves_amazon_music() {
         let reg = BrandRegistry::load();
-        let music = reg.resolve("amazon music").expect("amazon music should resolve");
+        let music = reg
+            .resolve("amazon music")
+            .expect("amazon music should resolve");
         assert_eq!(music.name, "Amazon Music");
         assert_eq!(music.file, "File:Amazon Music (Logo).svg");
 
         // Dashed format
-        let music_dash = reg.resolve("amazon-music").expect("amazon-music should resolve");
+        let music_dash = reg
+            .resolve("amazon-music")
+            .expect("amazon-music should resolve");
         assert_eq!(music_dash.name, "Amazon Music");
     }
 

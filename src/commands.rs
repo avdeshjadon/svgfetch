@@ -49,6 +49,11 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                     yes,
                     overwrite,
                     concurrency,
+                    dry_run: cli.dry_run,
+                    refresh: cli.refresh,
+                    no_cache: cli.no_cache,
+                    project: cli.project,
+                    no_project: cli.no_project,
                 })
                 .await
             }
@@ -57,7 +62,7 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                 output,
                 format,
                 overwrite,
-            } => cmd_download(file, output, format, overwrite).await,
+            } => cmd_download(file, output, format, overwrite, cli.dry_run, cli.no_project).await,
             Command::Category {
                 category,
                 limit,
@@ -80,6 +85,11 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                     yes,
                     overwrite,
                     concurrency: None,
+                    dry_run: cli.dry_run,
+                    refresh: cli.refresh,
+                    no_cache: cli.no_cache,
+                    project: cli.project,
+                    no_project: cli.no_project,
                 })
                 .await
             }
@@ -105,6 +115,11 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                     yes,
                     overwrite,
                     concurrency: None,
+                    dry_run: cli.dry_run,
+                    refresh: cli.refresh,
+                    no_cache: cli.no_cache,
+                    project: cli.project,
+                    no_project: cli.no_project,
                 })
                 .await
             }
@@ -117,10 +132,19 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
             }
             Command::Uninstall { yes } => crate::uninstall::run_uninstall(yes),
             Command::Update => crate::update::run_update().await,
+            Command::Info { asset, format } => cmd_info(&asset, format).await,
         }
     } else if !cli.brand.is_empty() {
         let query = cli.brand.join(" ");
-        cmd_direct_brand(&query, cli.output, cli.overwrite).await
+        cmd_direct_brand(
+            &query,
+            cli.output,
+            cli.overwrite,
+            cli.dry_run,
+            cli.no_project,
+            cli.refresh,
+        )
+        .await
     } else {
         interactive()
     }
@@ -131,6 +155,9 @@ pub async fn cmd_direct_brand(
     query: &str,
     output: Option<PathBuf>,
     overwrite: bool,
+    dry_run: bool,
+    no_project: bool,
+    refresh: bool,
 ) -> Result<i32> {
     let settings = Settings::load()?;
     let provider = WikimediaClient::new(&settings)?;
@@ -142,16 +169,20 @@ pub async fn cmd_direct_brand(
 
     // 1. Resolve brand (curated registry first, then search fallback)
     let (asset, is_curated, brand_name) = if let Some(brand) = registry.resolve(query_trim) {
-        eprintln!("\x1b[1;32m\u{2713}\x1b[0m Verified brand: \x1b[1m{}\x1b[0m", brand.name);
+        eprintln!(
+            "\x1b[1;32m\u{2713}\x1b[0m Curated brand mapping: \x1b[1m{}\x1b[0m",
+            brand.name
+        );
         match provider.get_asset(&brand.file).await? {
             Some(a) => (a, true, brand.name.clone()),
             None => {
-                let found = search::fetch_page(&provider, &cache, &brand.file, 0, 5).await?;
+                let found =
+                    search::fetch_page_opts(&provider, &cache, &brand.file, 0, 5, refresh).await?;
                 if let Some(a) = found.page.assets.into_iter().next() {
                     (a, true, brand.name.clone())
                 } else {
                     return Err(Error::Other(format!(
-                        "Verified file '{}' could not be resolved from Wikimedia",
+                        "Curated brand file '{}' could not be resolved from Wikimedia",
                         brand.file
                     )));
                 }
@@ -160,26 +191,45 @@ pub async fn cmd_direct_brand(
     } else {
         eprintln!("Searching for official \"{}\" logo...", query_trim);
         let search_query = format!("{query_trim} logo filetype:svg");
-        let found = search::fetch_page(&provider, &cache, &search_query, 0, 15).await?;
+        let found =
+            search::fetch_page_opts(&provider, &cache, &search_query, 0, 15, refresh).await?;
 
         let norm_q = crate::brands::normalize(query_trim);
-        let best = found.page.assets.iter().find(|a| {
-            let norm_title = crate::brands::normalize(a.original_name.trim_end_matches(".svg"));
-            norm_title == norm_q || norm_title.starts_with(&norm_q)
-        }).or_else(|| {
-            found.page.assets.iter().find(|a| {
-                a.original_name.to_lowercase().contains(&norm_q)
+        let best = found
+            .page
+            .assets
+            .iter()
+            .find(|a| {
+                let norm_title = crate::brands::normalize(a.original_name.trim_end_matches(".svg"));
+                norm_title == norm_q || norm_title.starts_with(&norm_q)
             })
-        }).or_else(|| found.page.assets.first()).cloned();
+            .or_else(|| {
+                found
+                    .page
+                    .assets
+                    .iter()
+                    .find(|a| a.original_name.to_lowercase().contains(&norm_q))
+            })
+            .or_else(|| found.page.assets.first())
+            .cloned();
 
         match best {
             Some(a) => {
-                eprintln!("\u{2139} \"{}\" is not yet in verified brands.json.", query_trim);
-                eprintln!("\x1b[1;32m\u{2713}\x1b[0m Best match: \x1b[1m{}\x1b[0m", a.original_name);
+                eprintln!(
+                    "\u{2139} \"{}\" is not yet in curated brands.json.",
+                    query_trim
+                );
+                eprintln!(
+                    "\x1b[1;32m\u{2713}\x1b[0m Best match: \x1b[1m{}\x1b[0m",
+                    a.original_name
+                );
                 (a, false, query_trim.to_string())
             }
             None => {
-                eprintln!("\x1b[1;31m\u{2717} No SVG logo found for \"{}\".\x1b[0m", query_trim);
+                eprintln!(
+                    "\x1b[1;31m\u{2717} No SVG logo found for \"{}\".\x1b[0m",
+                    query_trim
+                );
                 eprintln!("Tip: Run `svgfetch` with no arguments to search interactively.");
                 return Ok(1);
             }
@@ -211,16 +261,24 @@ pub async fn cmd_direct_brand(
             (file_path, None)
         }
         None => {
-            if let Some(ctx) = crate::project::find_project_context() {
-                eprintln!(
-                    "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
-                    ctx.kind.display_name(),
-                    ctx.root_name()
-                );
-                std::fs::create_dir_all(&ctx.target_dir)?;
-                let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
-                let path = ctx.target_dir.join(filename);
-                (path, Some(ctx))
+            let use_project = !no_project && settings.project_detection;
+            if use_project {
+                if let Some(ctx) = crate::project::find_project_context() {
+                    eprintln!(
+                        "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
+                        ctx.kind.display_name(),
+                        ctx.root_name()
+                    );
+                    std::fs::create_dir_all(&ctx.target_dir)?;
+                    let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                    let path = ctx.target_dir.join(filename);
+                    (path, Some(ctx))
+                } else {
+                    let base_dir = settings.download_dir.clone();
+                    std::fs::create_dir_all(&base_dir)?;
+                    let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                    (base_dir.join(filename), None)
+                }
             } else {
                 let base_dir = settings.download_dir.clone();
                 std::fs::create_dir_all(&base_dir)?;
@@ -240,6 +298,19 @@ pub async fn cmd_direct_brand(
         crate::config::contract_tilde(&target_file)
     };
 
+    if dry_run {
+        println!("Brand       : {}", brand_name);
+        println!("Provider    : Wikimedia Commons");
+        println!(
+            "Source      : {}",
+            asset.url.as_deref().unwrap_or("unknown")
+        );
+        println!("Destination : {}", pretty_path);
+        println!("License     : {}", asset.license_or_unknown());
+        println!("No files were downloaded (dry run).");
+        return Ok(0);
+    }
+
     if target_file.exists() && !overwrite {
         eprintln!(
             "\x1b[1;33m\u{26A0}\x1b[0m File '{}' already exists. Use `--overwrite` to replace.",
@@ -248,44 +319,141 @@ pub async fn cmd_direct_brand(
         return Ok(0);
     }
 
-    // 3. Download
+    // 3. Download via common hardened engine
     let download_url = asset.url.as_ref().ok_or_else(|| {
-        Error::Other(format!("No direct download URL available for {}", asset.original_name))
+        Error::Other(format!(
+            "No direct download URL available for {}",
+            asset.original_name
+        ))
     })?;
 
-    let client = provider.client();
-    let resp = client
-        .get(download_url)
-        .header(reqwest::header::USER_AGENT, settings.user_agent())
-        .header(reqwest::header::REFERER, "https://commons.wikimedia.org/")
-        .send()
-        .await?;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let outcome = crate::download::download_one_with_limit(
+        &provider.client(),
+        download_url,
+        &target_file,
+        settings.max_download_bytes(),
+        &cancel,
+        None,
+    )
+    .await?;
 
-    if !resp.status().is_success() {
-        return Err(Error::Other(format!(
-            "Failed to download SVG (HTTP {})",
-            resp.status()
-        )));
+    match outcome {
+        crate::download::DownloadOutcome::Written { bytes, sha256, .. } => {
+            let meta_dir = target_file.parent().unwrap_or(Path::new("."));
+            let mut asset_meta = asset.clone();
+            if let Some(fname) = target_file.file_name().and_then(|n| n.to_str()) {
+                asset_meta.file_name = fname.to_string();
+            }
+            let records = vec![(asset_meta, Some(sha256), Some(bytes))];
+            if let Err(e) = metadata::write_metadata_records(meta_dir, &brand_name, &records) {
+                tracing::warn!("Failed to write metadata: {e}");
+            }
+
+            let size_human = crate::models::format_size(bytes);
+            let license = asset.license_or_unknown();
+
+            eprintln!(
+                "\x1b[1;32m\u{2713} Saved to {}\x1b[0m ({}, {}) in {}",
+                pretty_path,
+                size_human,
+                license,
+                crate::models::format_ms(started.elapsed().as_millis() as u64)
+            );
+
+            if !is_curated {
+                eprintln!(
+                    "\x1b[2m💡 Tip: Want to curate this brand mapping? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch\x1b[0m"
+                );
+            }
+
+            Ok(0)
+        }
+        crate::download::DownloadOutcome::Skipped => {
+            eprintln!(
+                "\x1b[1;33m\u{26A0}\x1b[0m File '{}' already exists. Use `--overwrite` to replace.",
+                pretty_path
+            );
+            Ok(0)
+        }
     }
+}
 
-    let bytes = resp.bytes().await?;
-    std::fs::write(&target_file, &bytes)?;
+/// Display detailed metadata for an asset without downloading.
+pub async fn cmd_info(asset_name: &str, format: OutputFormat) -> Result<i32> {
+    let settings = Settings::load()?;
+    let provider = WikimediaClient::new(&settings)?;
+    let cache = Cache::new(&settings);
+    let registry = crate::brands::BrandRegistry::load();
 
-    let size_human = crate::models::format_size(bytes.len() as u64);
-    let license = asset.license_or_unknown();
+    let asset_name_trim = asset_name.trim();
+    let asset =
+        if let Some(brand) = registry.resolve(asset_name_trim) {
+            match provider.get_asset(&brand.file).await? {
+                Some(a) => a,
+                None => {
+                    let found = search::fetch_page(&provider, &cache, &brand.file, 0, 5).await?;
+                    found.page.assets.into_iter().next().ok_or_else(|| {
+                        Error::Other(format!("Asset '{}' not found", asset_name_trim))
+                    })?
+                }
+            }
+        } else {
+            let title =
+                if asset_name_trim.starts_with("File:") || asset_name_trim.starts_with("file:") {
+                    asset_name_trim.to_string()
+                } else if asset_name_trim.ends_with(".svg") {
+                    format!("File:{}", asset_name_trim)
+                } else {
+                    asset_name_trim.to_string()
+                };
 
-    eprintln!(
-        "\x1b[1;32m\u{2713} Saved to {}\x1b[0m ({}, {}) in {}",
-        pretty_path,
-        size_human,
-        license,
-        crate::models::format_ms(started.elapsed().as_millis() as u64)
-    );
+            match provider.get_asset(&title).await? {
+                Some(a) => a,
+                None => {
+                    let found =
+                        search::fetch_page(&provider, &cache, asset_name_trim, 0, 10).await?;
+                    found.page.assets.into_iter().next().ok_or_else(|| {
+                        Error::Other(format!(
+                            "Asset '{}' not found on Wikimedia Commons",
+                            asset_name_trim
+                        ))
+                    })?
+                }
+            }
+        };
 
-    if !is_curated {
-        eprintln!(
-            "\x1b[2m💡 Tip: Want to verify this brand? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch\x1b[0m"
-        );
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&asset)?);
+        }
+        _ => {
+            println!("Asset Information: {}", asset.title);
+            println!("{}", "-".repeat(60));
+            println!("File        : {}", asset.original_name);
+            println!("License     : {}", asset.license_or_unknown());
+            if let Some(url) = &asset.license_url {
+                println!("License URL : {}", url);
+            }
+            if let Some(author) = &asset.author {
+                println!("Author      : {}", author);
+            }
+            if let Some(source) = asset.page_url() {
+                println!("Source Page : {}", source);
+            }
+            if let Some(url) = &asset.url {
+                println!("Direct URL  : {}", url);
+            }
+            if let (Some(w), Some(h)) = (asset.width, asset.height) {
+                println!("Dimensions  : {} x {}", w, h);
+            }
+            if let Some(bytes) = asset.size_bytes {
+                println!("Size        : {}", crate::models::format_size(bytes));
+            }
+            if let Some(uploader) = &asset.uploader {
+                println!("Uploader    : {}", uploader);
+            }
+        }
     }
 
     Ok(0)
@@ -322,6 +490,11 @@ struct SearchArgs {
     yes: bool,
     overwrite: bool,
     concurrency: Option<usize>,
+    dry_run: bool,
+    refresh: bool,
+    no_cache: bool,
+    project: bool,
+    no_project: bool,
 }
 
 async fn cmd_search(args: SearchArgs) -> Result<i32> {
@@ -364,7 +537,15 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
 
     while fetched.len() < want {
         let page_limit = std::cmp::min(per_page as usize, want - fetched.len()) as u32;
-        let page = search::fetch_page(&provider, &cache, &args.query, cursor, page_limit).await?;
+        let page = search::fetch_page_opts(
+            &provider,
+            &cache,
+            &args.query,
+            cursor,
+            page_limit,
+            args.refresh || args.no_cache,
+        )
+        .await?;
         if total_hits.is_none() {
             total_hits = page.page.total_hits;
         }
@@ -394,6 +575,27 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
         crate::models::format_ms(started.elapsed().as_millis() as u64)
     );
 
+    if args.dry_run {
+        println!("Dry run search results for \"{}\":", args.query);
+        for (i, a) in assets.iter().enumerate() {
+            println!(
+                "{}. {} ({}, {})",
+                i + 1,
+                a.title,
+                a.original_name,
+                a.license_or_unknown()
+            );
+        }
+        if let Some(dest) = &args.download {
+            println!("Target directory   : {}", dest.display());
+        }
+        if let Some(zip_path) = &args.zip {
+            println!("Target ZIP archive : {}", zip_path.display());
+        }
+        println!("No files were downloaded or modified (dry run).");
+        return Ok(0);
+    }
+
     if let Some(dir) = &args.metadata {
         metadata::write_metadata_dir(dir, &args.query, &assets)?;
         eprintln!("Wrote attribution metadata to {}", dir.display());
@@ -416,9 +618,38 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
             exit_code = 1;
         }
         metadata::write_metadata_dir(&dir, &args.query, &assets)?;
-    }
 
-    if let Some(zip_path) = args.zip {
+        if let Some(zip_path) = args.zip {
+            let local_files: Vec<(String, PathBuf)> = assets
+                .iter()
+                .filter_map(|a| {
+                    let p = dir.join(&a.file_name);
+                    if p.exists() {
+                        Some((a.file_name.clone(), p))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if !local_files.is_empty() {
+                let report = archive::create_zip_from_local_files(
+                    &zip_path,
+                    &zip_stem(&args.query),
+                    &args.query,
+                    &assets,
+                    &local_files,
+                )
+                .await?;
+                eprintln!(
+                    "\u{2713} Created {} ({} files, {})",
+                    report.path.display(),
+                    report.files,
+                    format_size(report.bytes)
+                );
+            }
+        }
+    } else if let Some(zip_path) = args.zip {
         let report = run_zip(
             &settings,
             &provider,
@@ -450,13 +681,17 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
         let want_download =
             settings.assume_yes || ask_bool(&format!("\nDownload {} file(s)", assets.len()), true)?;
         if want_download {
-            let dest = if settings.assume_yes {
-                settings.download_dir.clone()
+            let default_dir = if !args.no_project && (args.project || settings.project_detection) {
+                crate::project::find_project_context()
+                    .map(|ctx| ctx.target_dir)
+                    .unwrap_or_else(|| settings.download_dir.clone())
             } else {
-                ask_dir(
-                    "Save to folder (Enter = app download folder)",
-                    &settings.download_dir,
-                )?
+                settings.download_dir.clone()
+            };
+            let dest = if settings.assume_yes {
+                default_dir
+            } else {
+                ask_dir("Save to folder (Enter = app download folder)", &default_dir)?
             };
             let stats = run_downloads(
                 &settings,
@@ -516,6 +751,8 @@ async fn cmd_download(
     output: Option<PathBuf>,
     format: OutputFormat,
     overwrite: bool,
+    dry_run: bool,
+    no_project: bool,
 ) -> Result<i32> {
     let settings = Settings::load()?;
     let provider = WikimediaClient::new(&settings)?;
@@ -552,20 +789,30 @@ async fn cmd_download(
                 // Fall back to a search so `download github` or `download amazon` works.
                 let raw_query = file.trim();
                 let found = search::fetch_page(&provider, &cache, raw_query, 0, 10).await?;
-                let exact = found.page.assets.iter().find(|a| {
-                    a.original_name.eq_ignore_ascii_case(raw_query)
-                        || a.title.eq_ignore_ascii_case(raw_query)
-                        || a.original_name
-                            .trim_end_matches(".svg")
-                            .eq_ignore_ascii_case(raw_query)
-                }).cloned();
+                let exact = found
+                    .page
+                    .assets
+                    .iter()
+                    .find(|a| {
+                        a.original_name.eq_ignore_ascii_case(raw_query)
+                            || a.title.eq_ignore_ascii_case(raw_query)
+                            || a.original_name
+                                .trim_end_matches(".svg")
+                                .eq_ignore_ascii_case(raw_query)
+                    })
+                    .cloned();
 
                 let contains = exact.or_else(|| {
-                    found.page.assets.iter().find(|a| {
-                        a.original_name
-                            .to_lowercase()
-                            .contains(&raw_query.to_lowercase())
-                    }).cloned()
+                    found
+                        .page
+                        .assets
+                        .iter()
+                        .find(|a| {
+                            a.original_name
+                                .to_lowercase()
+                                .contains(&raw_query.to_lowercase())
+                        })
+                        .cloned()
                 });
 
                 match contains.or_else(|| found.page.assets.into_iter().next()) {
@@ -586,18 +833,37 @@ async fn cmd_download(
     let (dest, project_ctx) = match output {
         Some(p) => (p, None),
         None => {
-            if let Some(ctx) = crate::project::find_project_context() {
-                eprintln!(
-                    "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
-                    ctx.kind.display_name(),
-                    ctx.root_name()
-                );
-                (ctx.target_dir.clone(), Some(ctx))
+            let use_project = !no_project && settings.project_detection;
+            if use_project {
+                if let Some(ctx) = crate::project::find_project_context() {
+                    eprintln!(
+                        "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
+                        ctx.kind.display_name(),
+                        ctx.root_name()
+                    );
+                    (ctx.target_dir.clone(), Some(ctx))
+                } else {
+                    (settings.download_dir.clone(), None)
+                }
             } else {
                 (settings.download_dir.clone(), None)
             }
         }
     };
+
+    if dry_run {
+        println!("File        : {}", asset.original_name);
+        println!("Provider    : Wikimedia Commons");
+        println!(
+            "Source      : {}",
+            asset.url.as_deref().unwrap_or("unknown")
+        );
+        println!("Destination : {}", dest.join(&asset.file_name).display());
+        println!("License     : {}", asset.license_or_unknown());
+        println!("No files were downloaded (dry run).");
+        return Ok(0);
+    }
+
     std::fs::create_dir_all(&dest)?;
     ensure_space(&dest, asset.size_bytes.unwrap_or(0))?;
 

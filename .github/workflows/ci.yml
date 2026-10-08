@@ -45,9 +45,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo test --all
       - run: cargo build --release --locked --bins
+      - name: Release binary smoke test
+        shell: bash
+        run: |
+          EXE="./target/release/svgfetch"
+          if [ -f "./target/release/svgfetch.exe" ]; then
+            EXE="./target/release/svgfetch.exe"
+          fi
+          "$EXE" --version
+          "$EXE" --help
+          "$EXE" doctor --json
+          "$EXE" amazon --dry-run
 
   msrv:
     name: MSRV check (1.88)
@@ -73,3 +83,20 @@ jobs:
       - uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  npm:
+    name: npm package validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: |
+          node --check npm/bin/install.js
+          node --check npm/bin/run.js
+      - name: npm pack dry-run
+        run: |
+          cd npm
+          npm pack --dry-run

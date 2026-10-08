@@ -337,7 +337,10 @@ impl App {
                 if let Some(i) = self.list_state.selected() {
                     if i < count {
                         if let Some(asset) = self.assets.get(i).cloned() {
-                            self.spawn_batch_download(vec![asset], self.settings.download_dir.clone());
+                            self.spawn_batch_download(
+                                vec![asset],
+                                self.settings.download_dir.clone(),
+                            );
                         }
                     }
                 }
@@ -359,7 +362,10 @@ impl App {
                             1 => {
                                 let chosen = selected_assets(&self.assets, &self.selected);
                                 if !chosen.is_empty() {
-                                    self.spawn_batch_download(chosen, self.settings.download_dir.clone());
+                                    self.spawn_batch_download(
+                                        chosen,
+                                        self.settings.download_dir.clone(),
+                                    );
                                 }
                             }
                             2 => self.zip_confirm = true,
@@ -403,23 +409,19 @@ impl App {
             return;
         }
         match key.code {
-            KeyCode::Up | KeyCode::Left | KeyCode::Char('k' | 'h') => {
-                if self.detail_index > 0 {
-                    self.detail_index -= 1;
-                    self.trigger_preview_load();
-                }
+            KeyCode::Up | KeyCode::Left | KeyCode::Char('k' | 'h') if self.detail_index > 0 => {
+                self.detail_index -= 1;
+                self.trigger_preview_load();
             }
-            KeyCode::Down | KeyCode::Right | KeyCode::Char('j' | 'l') => {
-                if self.detail_index + 1 < self.assets.len() {
-                    self.detail_index += 1;
-                    self.trigger_preview_load();
-                }
+            KeyCode::Down | KeyCode::Right | KeyCode::Char('j' | 'l')
+                if self.detail_index + 1 < self.assets.len() =>
+            {
+                self.detail_index += 1;
+                self.trigger_preview_load();
             }
             _ => {}
         }
     }
-
-
 
     fn on_key_downloading(&mut self, key: KeyEvent) {
         if self.keymap.matches(&key, self.keymap.quit) {
@@ -433,8 +435,7 @@ impl App {
                 Screen::Results
             };
             self.list_state.select(Some(
-                self.detail_index
-                    .min(self.assets.len().saturating_sub(1)),
+                self.detail_index.min(self.assets.len().saturating_sub(1)),
             ));
         }
     }
@@ -784,7 +785,11 @@ impl App {
         let candidate_bytes = direct_url
             .as_ref()
             .and_then(|u| self.preview_bytes_cache.get(u))
-            .or_else(|| thumb_url.as_ref().and_then(|u| self.preview_bytes_cache.get(u)))
+            .or_else(|| {
+                thumb_url
+                    .as_ref()
+                    .and_then(|u| self.preview_bytes_cache.get(u))
+            })
             .cloned();
 
         let title = asset.original_name.clone();
@@ -1124,27 +1129,45 @@ mod tests {
         app.list_state.select(Some(1));
 
         // Press Enter on item 1 -> opens Details
-        app.on_key(KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert_eq!(app.screen, Screen::Details);
         assert_eq!(app.detail_index, 1);
 
         // Press Up -> previous detail (index 0)
-        app.on_key(KeyEvent::new(KeyCode::Up, crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Up,
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert_eq!(app.detail_index, 0);
 
         // Press Down -> next detail (index 1)
-        app.on_key(KeyEvent::new(KeyCode::Down, crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Down,
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert_eq!(app.detail_index, 1);
 
         // Press Esc -> back to Results
-        app.on_key(KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert_eq!(app.screen, Screen::Results);
         assert_eq!(app.list_state.selected(), Some(1));
 
         // Re-enter Details screen and press 'n' -> back to Results
-        app.on_key(KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert_eq!(app.screen, Screen::Details);
-        app.on_key(KeyEvent::new(KeyCode::Char('n'), crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Char('n'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert_eq!(app.screen, Screen::Results);
     }
 
@@ -1165,19 +1188,30 @@ mod tests {
         app.screen = Screen::Results;
 
         // Press 'z' -> triggers zip_confirm dialog
-        app.on_key(KeyEvent::new(KeyCode::Char('z'), crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Char('z'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert!(app.zip_confirm);
 
         // Press 'n' -> cancels zip_confirm dialog without starting download
-        app.on_key(KeyEvent::new(KeyCode::Char('n'), crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Char('n'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert!(!app.zip_confirm);
         assert!(app.zip.is_none());
 
         // Press 'z' again then Esc -> also cancels
-        app.on_key(KeyEvent::new(KeyCode::Char('z'), crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Char('z'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert!(app.zip_confirm);
-        app.on_key(KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
         assert!(!app.zip_confirm);
     }
 }
-

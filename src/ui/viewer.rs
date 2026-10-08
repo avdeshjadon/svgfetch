@@ -11,7 +11,8 @@
 use std::path::{Path, PathBuf};
 
 pub fn generate_viewer_html(_title: &str, svg_content: &str) -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -162,7 +163,8 @@ if (svg) {{
 }}
 </script>
 </body>
-</html>"#)
+</html>"#
+    )
 }
 
 pub fn open_vector_window(title: &str, svg_bytes: &[u8]) -> std::io::Result<PathBuf> {

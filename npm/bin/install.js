@@ -5,9 +5,16 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
+const crypto = require('crypto');
+
 const pkg = require('../package.json');
 const VERSION = `v${pkg.version}`;
 const REPO = 'avdeshjadon/svgfetch';
+
+function computeSha256(filePath) {
+  const content = fs.readFileSync(filePath);
+  return crypto.createHash('sha256').update(content).digest('hex').toLowerCase();
+}
 
 function getTarget() {
   const platform = os.platform();
@@ -22,6 +29,32 @@ function getTarget() {
     if (arch === 'x64') return { target: 'x86_64-pc-windows-msvc', ext: 'zip', binary: 'svgfetch.exe' };
   }
   return null;
+}
+
+async function downloadText(url) {
+  if (typeof fetch === 'function') {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    return (await res.text()).trim();
+  }
+
+  const https = require('https');
+  return new Promise((resolve, reject) => {
+    function get(u) {
+      https.get(u, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return get(res.headers.location);
+        }
+        if (res.statusCode !== 200) {
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => resolve(data.trim()));
+      }).on('error', reject);
+    }
+    get(url);
+  });
 }
 
 async function download(url, dest) {
@@ -72,10 +105,31 @@ async function install() {
 
   try {
     process.stdout.write(`[svgfetch] Downloading prebuilt binary…\n`);
+    let downloadedArtifact = primaryArtifact;
     try {
       await download(`https://github.com/${REPO}/releases/download/${VERSION}/${primaryArtifact}`, tempArchive);
     } catch (_) {
+      downloadedArtifact = legacyArtifact;
       await download(`https://github.com/${REPO}/releases/download/${VERSION}/${legacyArtifact}`, tempArchive);
+    }
+
+    // Verify SHA-256 checksum before extracting
+    try {
+      const checksumUrl = `https://github.com/${REPO}/releases/download/${VERSION}/${downloadedArtifact}.sha256`;
+      const checksumText = await downloadText(checksumUrl);
+      const expectedSha = checksumText.trim().split(/\s+/)[0].toLowerCase();
+      const actualSha = computeSha256(tempArchive);
+      if (expectedSha && expectedSha.length === 64) {
+        if (actualSha !== expectedSha) {
+          throw new Error(`SHA-256 checksum mismatch for ${downloadedArtifact}: expected ${expectedSha}, got ${actualSha}`);
+        }
+        process.stdout.write(`[svgfetch] Verified SHA-256 checksum (${actualSha.slice(0, 8)}…)\n`);
+      }
+    } catch (csErr) {
+      if (csErr.message.includes('checksum mismatch')) {
+        throw csErr;
+      }
+      process.stdout.write(`[svgfetch] Notice: Checksum verification skipped (${csErr.message})\n`);
     }
 
     if (info.ext === 'zip') {

@@ -5,10 +5,10 @@
 //! live Wikimedia API. Security-sensible assertions: relevance order,
 //! offsets, and metadata extraction are pinned here on purpose.
 
+use httpmock::prelude::*;
 use svgfetch::api::AssetProvider as _;
 use svgfetch::api::WikimediaClient;
 use svgfetch::config::Settings;
-use httpmock::prelude::*;
 
 /// Match the plain `titles` existence-confirmation query, which carries no
 /// `prop` parameter (the imageinfo lookup does carry one).
