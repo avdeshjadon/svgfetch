@@ -1,8 +1,8 @@
 //! Self-update: fetch the latest GitHub release and replace the running binary.
 //!
-//! `getsvg update` resolves the newest tagged release for the current
+//! `svgfetch update` resolves the newest tagged release for the current
 //! platform, downloads the packaged archive, verifies its SHA-256, and swaps
-//! the installed `get-svg`/`getsvg` binaries in place. Older binaries and any
+//! the installed `svgfetch` binaries in place. Older binaries and any
 //! leftover `.old` files are removed so no stale copies survive.
 
 use std::io::{Read, Write as _};
@@ -208,7 +208,7 @@ fn extract(archive: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Recursively find release binaries (`get-svg`/`getsvg`, optional `.exe`)
+/// Recursively find release binaries (`svgfetch`, optional `.exe`)
 /// inside the extracted archive.
 fn find_binaries(root: &Path) -> Result<Vec<PathBuf>> {
     let ext = if cfg!(windows) { ".exe" } else { "" };
@@ -320,11 +320,11 @@ pub async fn run_update() -> Result<i32> {
 
     let triple = target_triple()?;
     let ext = archive_ext();
-    let asset_name = format!("get-svg-{triple}.{ext}");
-    let checksum_name = format!("{asset_name}.sha256");
+    let primary_asset = format!("svgfetch-{triple}.{ext}");
+    let legacy_asset = format!("get-svg-{triple}.{ext}");
 
     let client = reqwest::Client::builder()
-        .user_agent(format!("get-svg/{current} (self-update)"))
+        .user_agent(format!("svgfetch/{current} (self-update)"))
         .build()?;
 
     let latest_url = format!("{}/releases/latest", api_root());
@@ -344,19 +344,21 @@ pub async fn run_update() -> Result<i32> {
         } else {
             "running a newer build than the latest release"
         };
-        println!("✓ get-svg v{current} is {note} (latest: v{latest})");
+        println!("✓ svgfetch v{current} is {note} (latest: v{latest})");
         return Ok(0);
     }
 
     let asset = release
         .assets
         .iter()
-        .find(|a| a.name == asset_name)
+        .find(|a| a.name == primary_asset || a.name == legacy_asset)
         .ok_or_else(|| {
             Error::Other(format!(
-                "release v{latest} does not ship {asset_name} for this platform"
+                "release v{latest} does not ship {primary_asset} for this platform"
             ))
         })?;
+    let asset_name = asset.name.clone();
+    let checksum_name = format!("{asset_name}.sha256");
     let checksum_asset = release
         .assets
         .iter()
@@ -368,7 +370,7 @@ pub async fn run_update() -> Result<i32> {
         })?;
 
     println!(
-        "✚ Updating get-svg v{current} → v{latest} (installed in {})",
+        "✚ Updating svgfetch v{current} → v{latest} (installed in {})",
         bin_dir.display()
     );
 
@@ -400,7 +402,7 @@ pub async fn run_update() -> Result<i32> {
     let fresh = find_binaries(&extract_dir)?;
     let ext_bin = if cfg!(windows) { ".exe" } else { "" };
     let mut installed = Vec::new();
-    for name in ["get-svg", "getsvg"] {
+    for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
         let target = bin_dir.join(format!("{name}{ext_bin}"));
         if let Some(source) = fresh.iter().find(|p| {
             p.file_name().map(|n| n.to_string_lossy().into_owned())
@@ -424,7 +426,7 @@ pub async fn run_update() -> Result<i32> {
         println!("✓ Installed {}", installed.join(", "));
     }
 
-    for name in ["get-svg", "getsvg"] {
+    for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
         let stale = bin_dir.join(format!("{name}{ext_bin}.old"));
         if stale.exists() && std::fs::remove_file(&stale).is_err() {
             #[cfg(windows)]
@@ -440,9 +442,9 @@ pub async fn run_update() -> Result<i32> {
     println!("✓ Old binaries removed");
 
     println!(
-        "\n✓ Update complete. Restart get-svg to use v{latest}.\n\
+        "\n✓ Update complete. Restart svgfetch to use v{latest}.\n\
          Installer one-liner (keeps this updated):\n  \
-         curl -fsSL https://cli.get-svg.app/install | sh"
+         curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
     );
     Ok(0)
 }
@@ -461,7 +463,7 @@ mod tests {
 
     #[test]
     fn checksum_line_parses_hex() {
-        let text = "fc6467fabb6c024e5211e4388b8bf16ad4e203bcbb5c6c52a2e4f58a1af1088a  get-svg\n";
+        let text = "fc6467fabb6c024e5211e4388b8bf16ad4e203bcbb5c6c52a2e4f58a1af1088a  svgfetch\n";
         let hex = text
             .split_whitespace()
             .find(|t| t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -472,8 +474,8 @@ mod tests {
     #[test]
     fn install_binary_replaces_and_removes_old() {
         let tmp = tempfile::tempdir().unwrap();
-        let src = tmp.path().join("get-svg");
-        let dest = tmp.path().join("getsvg");
+        let src = tmp.path().join("svgfetch-new");
+        let dest = tmp.path().join("svgfetch");
         std::fs::write(&src, b"new-binary").unwrap();
         std::fs::write(&dest, b"old-binary").unwrap();
         install_binary(&src, &dest).unwrap();

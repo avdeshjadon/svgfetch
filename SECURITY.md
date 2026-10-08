@@ -44,10 +44,8 @@ unless you ask to remain anonymous.
 
 ## Out of scope
 
-- Bugs in third-party crates unless GET SVG invokes them unsafely.
+- Bugs in third-party crates unless svgfetch invokes them unsafely.
 - Social engineering of Wikimedia editors via content in the result set.
-- Vulnerabilities in the reverse-dependency `getsvg` alias binary beyond what
-  the crate itself has.
 
 ## Security model notes
 

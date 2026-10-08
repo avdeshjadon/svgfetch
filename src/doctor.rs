@@ -1,4 +1,4 @@
-//! `get-svg doctor` — environment checks with actionable output.
+//! `svgfetch doctor` — environment checks with actionable output.
 
 use std::path::Path;
 use std::time::Duration;
@@ -157,7 +157,7 @@ pub async fn run(settings: &Settings) -> Result<Report> {
             Status::Warn,
             "stdout is not a TTY; interactive mode unavailable".to_string(),
             Some(
-                "Run inside a terminal for the full experience; use `get-svg search` in scripts."
+                "Run inside a terminal for the full experience; use `svgfetch search` in scripts."
                     .into(),
             ),
         )

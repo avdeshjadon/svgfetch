@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
-const VERSION = 'v0.2.3';
+const VERSION = 'v0.2.4';
 const REPO = 'avdeshjadon/svgfetch';
 
 function getTarget() {
@@ -65,13 +65,17 @@ async function install() {
     return binaryPath;
   }
 
-  const artifact = `get-svg-${info.target}.${info.ext}`;
-  const url = `https://github.com/${REPO}/releases/download/${VERSION}/${artifact}`;
+  const primaryArtifact = `svgfetch-${info.target}.${info.ext}`;
+  const legacyArtifact = `get-svg-${info.target}.${info.ext}`;
   const tempArchive = path.join(os.tmpdir(), `svgfetch-${Date.now()}.${info.ext}`);
 
   try {
     process.stdout.write(`[svgfetch] Downloading prebuilt binary…\n`);
-    await download(url, tempArchive);
+    try {
+      await download(`https://github.com/${REPO}/releases/download/${VERSION}/${primaryArtifact}`, tempArchive);
+    } catch (_) {
+      await download(`https://github.com/${REPO}/releases/download/${VERSION}/${legacyArtifact}`, tempArchive);
+    }
 
     if (info.ext === 'zip') {
       try {

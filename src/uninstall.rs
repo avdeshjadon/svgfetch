@@ -1,10 +1,10 @@
-//! `getsvg dlt` — completely remove GET SVG from the system.
+//! `svgfetch uninstall` — completely remove svgfetch from the system.
 //!
-//! Deletes everything the app owns so a fresh `getsvg` behaves like a brand
+//! Deletes everything the app owns so a fresh install behaves like a brand
 //! new install:
 //! * the config directory (config.toml + cache + recent searches),
-//! * the default download folder (`~/Downloads/get-svg`),
-//! * the installed `get-svg` / `getsvg` binaries (including the running one).
+//! * the default download folder (`~/Downloads/svgfetch`),
+//! * the installed `svgfetch` binaries (including the running one).
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -42,7 +42,39 @@ impl UninstallPlan {
 
 /// Derive the plan (no filesystem writes).
 pub fn collect_plan(settings: &Settings) -> UninstallPlan {
-    collect_plan_with_exe(settings, std::env::current_exe().ok().as_deref())
+    let mut plan = collect_plan_with_exe(settings, std::env::current_exe().ok().as_deref());
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+
+    let mut extra_dirs = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        let local_bin = home.join(".local").join("bin");
+        if local_bin.exists() {
+            extra_dirs.push(local_bin);
+        }
+        let cargo_bin = home.join(".cargo").join("bin");
+        if cargo_bin.exists() {
+            extra_dirs.push(cargo_bin);
+        }
+    }
+    let usr_local = PathBuf::from("/usr/local/bin");
+    if usr_local.exists() {
+        extra_dirs.push(usr_local);
+    }
+
+    for dir in extra_dirs {
+        for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
+            let path = dir.join(format!("{name}{ext}"));
+            if path.exists() && !plan.binaries.contains(&path) {
+                plan.binaries.push(path);
+            }
+            let stale = dir.join(format!("{name}{ext}.old"));
+            if stale.exists() && !plan.binaries.contains(&stale) {
+                plan.binaries.push(stale);
+            }
+        }
+    }
+
+    plan
 }
 
 /// Same as [`collect_plan`], but the running binary is supplied explicitly so
@@ -124,7 +156,7 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
                     .into(),
             ));
         }
-        eprint!("Are you sure? This permanently deletes the files above. [y/N] ");
+        eprint!("Are you sure? This permanently deletes the files above and uninstalls svgfetch. [y/N] ");
         std::io::stderr().flush().ok();
         let mut line = String::new();
         std::io::stdin().read_line(&mut line)?;
@@ -136,6 +168,16 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
 
     remove_dir_report(&plan.config_dir, "config");
     remove_dir_report(&plan.download_dir, "downloads");
+
+    // Also remove global npm install if present
+    if let Ok(output) = std::process::Command::new("npm")
+        .args(["uninstall", "-g", "svgfetch", "@avdeshjadon/get-svg"])
+        .output()
+    {
+        if output.status.success() {
+            println!("\u{2713} uninstalled npm global package svgfetch");
+        }
+    }
 
     if let Ok(cur) = std::env::current_exe() {
         for bin in &plan.binaries {
@@ -247,8 +289,8 @@ mod tests {
     #[test]
     fn default_folders_are_in_plan() {
         let dir = tempfile::tempdir().unwrap();
-        let cfg = dir.path().join("get-svg");
-        let dl = dir.path().join("get-svg");
+        let cfg = dir.path().join("svgfetch");
+        let dl = dir.path().join("svgfetch");
         std::fs::create_dir_all(&cfg).unwrap();
         let plan = collect_plan_with_exe(&settings_with(&cfg, &dl), None);
         assert!(plan.config_dir.is_some());
@@ -256,10 +298,10 @@ mod tests {
     }
 
     #[test]
-    fn distinct_get_svg_downloads_included() {
+    fn distinct_svgfetch_downloads_included() {
         let dir = tempfile::tempdir().unwrap();
-        let cfg = dir.path().join("cfg").join("get-svg");
-        let dl = dir.path().join("dl").join("get-svg");
+        let cfg = dir.path().join("cfg").join("svgfetch");
+        let dl = dir.path().join("dl").join("svgfetch");
         std::fs::create_dir_all(&cfg).unwrap();
         std::fs::create_dir_all(&dl).unwrap();
         let plan = collect_plan_with_exe(&settings_with(&cfg, &dl), None);
@@ -270,7 +312,7 @@ mod tests {
     #[test]
     fn custom_download_dir_is_never_wiped() {
         let dir = tempfile::tempdir().unwrap();
-        let cfg = dir.path().join("get-svg");
+        let cfg = dir.path().join("svgfetch");
         let custom = dir.path().join("my-icons");
         std::fs::create_dir_all(&cfg).unwrap();
         std::fs::create_dir_all(&custom).unwrap();
@@ -281,7 +323,7 @@ mod tests {
     #[test]
     fn no_trace_yields_empty_plan() {
         let dir = tempfile::tempdir().unwrap();
-        let cfg = dir.path().join("get-svg");
+        let cfg = dir.path().join("svgfetch");
         let plan = collect_plan_with_exe(&settings_with(&cfg, &cfg), None);
         assert!(plan.targets().is_empty());
     }
@@ -292,29 +334,29 @@ mod tests {
         let bindir = dir.path().join("bin");
         std::fs::create_dir_all(&bindir).unwrap();
         let ext = if cfg!(windows) { ".exe" } else { "" };
-        for name in ["get-svg", "getsvg"] {
+        for name in ["svgfetch", "svg-fetch"] {
             std::fs::write(bindir.join(format!("{name}{ext}")), b"").unwrap();
         }
-        let exe = bindir.join(format!("get-svg{ext}"));
+        let exe = bindir.join(format!("svgfetch{ext}"));
         let plan = collect_plan_with_exe(&settings_with(&bindir, &bindir), Some(&exe));
         let names: Vec<String> = plan
             .binaries
             .iter()
             .map(|b| b.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(names, vec![format!("get-svg{ext}"), format!("getsvg{ext}")]);
+        assert_eq!(names, vec![format!("svgfetch{ext}"), format!("svg-fetch{ext}")]);
     }
 
     #[test]
     fn plan_targets_are_lowercased_safe() {
         let plan = UninstallPlan {
-            config_dir: Some(PathBuf::from("/x/get-svg")),
+            config_dir: Some(PathBuf::from("/x/svgfetch")),
             download_dir: None,
-            binaries: vec![PathBuf::from("/x/bin/get-svg")],
+            binaries: vec![PathBuf::from("/x/bin/svgfetch")],
         };
         let targets = plan.targets();
         assert!(targets
             .iter()
-            .all(|p| p.to_string_lossy().contains("get-svg")));
+            .all(|p| p.to_string_lossy().contains("svgfetch")));
     }
 }

@@ -152,7 +152,7 @@ impl Cache {
         Ok(removed)
     }
 
-    /// Snapshot of disk usage, for `get-svg cache status`.
+    /// Snapshot of disk usage, for `svgfetch cache status`.
     pub fn status(&self) -> CacheStatus {
         let mut file_count = 0usize;
         let mut total_bytes = 0u64;

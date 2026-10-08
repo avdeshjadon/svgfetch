@@ -64,7 +64,7 @@ try {
     if (-not $primary) { throw "archive did not contain any executable binary" }
 
     New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-    foreach ($exe in @("$bin.exe", 'svg-fetch.exe', 'get-svg.exe', 'getsvg.exe')) {
+    foreach ($exe in @("$bin.exe", 'svg-fetch.exe')) {
         $binary = Get-ChildItem -Path $extract -Recurse -Filter $exe | Select-Object -First 1
         if (-not $binary) {
             Copy-Item -Path $primary.FullName -Destination (Join-Path $destDir $exe) -Force

@@ -33,7 +33,7 @@ impl BrandRegistry {
             map.extend(parsed.brands);
         }
 
-        // 2. Check user's custom local ~/.config/get-svg/brands.json if present
+        // 2. Check user's custom local ~/.config/svgfetch/brands.json if present
         if let Some(user_config) = user_brands_path() {
             if user_config.exists() {
                 if let Ok(content) = std::fs::read_to_string(&user_config) {
@@ -121,7 +121,7 @@ pub fn slugify(name: &str) -> String {
 }
 
 fn user_brands_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("get-svg").join("brands.json"))
+    dirs::config_dir().map(|d| d.join("svgfetch").join("brands.json"))
 }
 
 #[cfg(test)]

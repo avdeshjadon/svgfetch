@@ -60,9 +60,9 @@ jobs:
           ARTIFACT="svgfetch-$TARGET.$ARCHIVE"
           mkdir -p "dist/$PREFIX"
           cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/"
-          cp "target/$TARGET/release/svg-fetch$EXT" "dist/$PREFIX/"
-          cp "target/$TARGET/release/get-svg$EXT" "dist/$PREFIX/"
-          cp "target/$TARGET/release/getsvg$EXT" "dist/$PREFIX/"
+          cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/svg-fetch$EXT"
+          cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/get-svg$EXT"
+          cp "target/$TARGET/release/svgfetch$EXT" "dist/$PREFIX/getsvg$EXT"
           cp README.md LICENSE-MIT LICENSE-APACHE "dist/$PREFIX/"
           cd dist
           if [ "$ARCHIVE" = "zip" ]; then
@@ -92,3 +92,21 @@ jobs:
             dist/svgfetch-${{ matrix.target }}.${{ matrix.archive }}
             dist/svgfetch-${{ matrix.target }}.${{ matrix.archive }}.sha256
           generate_release_notes: true
+
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Publish to npm
+        run: |
+          cd npm
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true

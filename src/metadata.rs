@@ -1,6 +1,6 @@
 //! Attribution and license metadata export.
 //!
-//! GET SVG treats licensing as per-asset metadata. It never assumes two
+//! svgfetch treats licensing as per-asset metadata. It never assumes two
 //! Wikimedia Commons files share a license, and never invents one.
 
 use std::path::{Path, PathBuf};

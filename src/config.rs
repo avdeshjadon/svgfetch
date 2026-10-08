@@ -1,4 +1,4 @@
-//! Configuration: `~/.config/get-svg/config.toml` (platform config dir).
+//! Configuration: `~/.config/svgfetch/config.toml` (platform config dir).
 
 use std::path::{Path, PathBuf};
 
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
-/// Default batch concurrency. Conservative on purpose: GET SVG must stay
+/// Default batch concurrency. Conservative on purpose: svgfetch must stay
 /// polite toward Wikimedia's shared infrastructure.
 pub const DEFAULT_MAX_CONCURRENCY: usize = 4;
 /// Minimum gap between the *starts* of two API requests, per process.
@@ -208,7 +208,7 @@ impl Settings {
         (self.max_response_mb as usize).saturating_mul(1024 * 1024)
     }
 
-    /// Config as TOML, for `get-svg config`.
+    /// Config as TOML, for `svgfetch config`.
     pub fn to_toml_string(&self) -> String {
         let file = ConfigFile {
             download_directory: Some(self.download_dir.clone()),

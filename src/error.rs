@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Top-level error type for GET SVG.
+/// Top-level error type for svgfetch.
 ///
 /// Display implementations are intentionally human-readable: they are shown
 /// directly to users. Technical detail lives in the variant payload and is

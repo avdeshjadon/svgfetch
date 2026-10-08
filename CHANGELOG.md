@@ -24,10 +24,16 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses
 - The `d`/`D` home shortcut now correctly routes through search semantics
   instead of a leftover `DownloadInput` path mapping.
 
+## [0.2.4] - 2026-10-08
+
+### Added
+- **Smart Project Detection**: Automatically detects React, Next.js, Vue, Nuxt, Svelte, Vite, and Node projects and downloads to `src/images/` or `public/images/`.
+- **Complete Uninstall Command**: `svgfetch uninstall` (alias `dlt`) cleanly wipes configs, caches, download folder, and global npm packages.
+
 ## [0.2.3] - 2026-10-02
 
 ### Changed
-- **Minimal search-first TUI with ASCII Logo Banner**: Launching `get-svg` / `getsvg` directly displays the GET SVG block-letter banner with tagline and the search input box immediately below it without any cluttered menus.
+- **Minimal search-first TUI with ASCII Logo Banner**: Launching `svgfetch` directly displays the SVGFETCH block-letter banner with tagline and the search input box immediately below it without any cluttered menus.
 - **Detailed Asset View**: Pressing `Enter` on any search result opens a comprehensive details screen showing license, dimensions, file size, direct SVG download URL, and direct canonical Wikimedia Commons web link.
 - **Confirmation Prompts for Downloads**:
   - **Complete ZIP Archive**: Added `Download all files as complete ZIP` action with `[Y/N]` confirmation dialog.
@@ -42,7 +48,7 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses
 ### Added
 - Home screen **Download a file** menu entry plus a `d` shortcut that opens a
   dedicated download prompt (accepts `File:Title` or `name.svg`).
-- `get-svg update` self-update subcommand with release fetching, checksum
+- `svgfetch update` self-update subcommand with release fetching, checksum
   verification (SHA-256), atomic swap, and cleanup of old binaries.
 - `download` route in the search box hinting you can fetch by exact name.
 
@@ -52,7 +58,7 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses
 
 
 ### Added
-- Interactive TUI (`get-svg` with no arguments) with search, multi-select,
+- Interactive TUI (`svgfetch` with no arguments) with search, multi-select,
   live download/ZIP progress, and an attribution/details view.
 - Provider abstraction (`AssetProvider`) designed so a second SVG
   source can be added without touching UI or download code.
@@ -63,7 +69,6 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses
   metadata via `--metadata`.
 - On-disk search-result cache with TTL and size budget; `cache status`/`clear`.
 - Case-insensitive, collision-safe filename allocation (`file.svg`, `file-1.svg`).
-- Association: `get-svg` and `getsvg` binaries from the same crate.
 
 ### Security
 - Central sanitizers in `src/security.rs`: filename sanitization, safe path

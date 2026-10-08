@@ -87,7 +87,7 @@ impl WikimediaClient {
         let endpoint = endpoint.into();
         // Keep existing transport config identical to production.
         let client = Client::builder()
-            .user_agent(format!("GET-SVG/test ({endpoint})"))
+            .user_agent(format!("svgfetch/test ({endpoint})"))
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(5))

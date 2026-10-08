@@ -115,7 +115,7 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                 cmd_version();
                 Ok(0)
             }
-            Command::Dlt { yes } => crate::uninstall::run_uninstall(yes),
+            Command::Uninstall { yes } => crate::uninstall::run_uninstall(yes),
             Command::Update => crate::update::run_update().await,
         }
     } else if !cli.brand.is_empty() {
@@ -187,12 +187,12 @@ pub async fn cmd_direct_brand(
     };
 
     // 2. Determine target file path
-    let target_file = match output {
+    let (target_file, project_ctx) = match output {
         Some(p) => {
             let is_target_dir = p.is_dir()
                 || p.to_string_lossy().ends_with('/')
                 || p.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
-            if is_target_dir {
+            let file_path = if is_target_dir {
                 std::fs::create_dir_all(&p)?;
                 let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
                 p.join(filename)
@@ -207,17 +207,38 @@ pub async fn cmd_direct_brand(
                 std::fs::create_dir_all(&p)?;
                 let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
                 p.join(filename)
-            }
+            };
+            (file_path, None)
         }
         None => {
-            let base_dir = settings.download_dir.clone();
-            std::fs::create_dir_all(&base_dir)?;
-            let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
-            base_dir.join(filename)
+            if let Some(ctx) = crate::project::find_project_context() {
+                eprintln!(
+                    "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
+                    ctx.kind.display_name(),
+                    ctx.root_name()
+                );
+                std::fs::create_dir_all(&ctx.target_dir)?;
+                let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                let path = ctx.target_dir.join(filename);
+                (path, Some(ctx))
+            } else {
+                let base_dir = settings.download_dir.clone();
+                std::fs::create_dir_all(&base_dir)?;
+                let filename = format!("{}.svg", crate::brands::slugify(&brand_name));
+                (base_dir.join(filename), None)
+            }
         }
     };
 
-    let pretty_path = crate::config::contract_tilde(&target_file);
+    let pretty_path = if let Some(ctx) = &project_ctx {
+        if let Ok(rel) = target_file.strip_prefix(&ctx.root) {
+            format!("./{}", rel.display())
+        } else {
+            crate::config::contract_tilde(&target_file)
+        }
+    } else {
+        crate::config::contract_tilde(&target_file)
+    };
 
     if target_file.exists() && !overwrite {
         eprintln!(
@@ -562,7 +583,21 @@ async fn cmd_download(
         }
     };
 
-    let dest = output.unwrap_or(settings.download_dir.clone());
+    let (dest, project_ctx) = match output {
+        Some(p) => (p, None),
+        None => {
+            if let Some(ctx) = crate::project::find_project_context() {
+                eprintln!(
+                    "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
+                    ctx.kind.display_name(),
+                    ctx.root_name()
+                );
+                (ctx.target_dir.clone(), Some(ctx))
+            } else {
+                (settings.download_dir.clone(), None)
+            }
+        }
+    };
     std::fs::create_dir_all(&dest)?;
     ensure_space(&dest, asset.size_bytes.unwrap_or(0))?;
 
@@ -594,7 +629,16 @@ async fn cmd_download(
     let mut lock = stdout.lock();
     if stats.completed > 0 {
         let saved = dest.join(&asset.file_name);
-        eprintln!("\u{2713} Saved {}", saved.display());
+        let pretty_saved = if let Some(ctx) = &project_ctx {
+            if let Ok(rel) = saved.strip_prefix(&ctx.root) {
+                format!("./{}", rel.display())
+            } else {
+                crate::config::contract_tilde(&saved)
+            }
+        } else {
+            crate::config::contract_tilde(&saved)
+        };
+        eprintln!("\u{2713} Saved {}", pretty_saved);
         write_asset_record(&mut lock, format, &asset)?;
         lock.flush()?;
         Ok(0)

@@ -21,6 +21,7 @@ pub mod logging;
 pub mod metadata;
 pub mod models;
 pub mod output;
+pub mod project;
 pub mod search;
 pub mod security;
 pub mod ui;

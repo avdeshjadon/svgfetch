@@ -190,10 +190,10 @@ pub enum Command {
     /// Completely remove svgfetch from this system.
     ///
     /// Deletes the config (settings, cache, recent searches), the default
-    /// `svgfetch` download folder, and the installed `svgfetch`
-    /// binaries — leaving no trace. A custom download directory is left
-    /// untouched unless its name is `svgfetch`.
-    Dlt {
+    /// `svgfetch` download folder, global npm package, and installed
+    /// binaries — leaving no trace.
+    #[command(alias = "dlt")]
+    Uninstall {
         /// Skip the confirmation prompt.
         #[arg(long, short = 'y')]
         yes: bool,
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn parses_cache_clear() {
-        let cli = Cli::parse_from(["get-svg", "cache", "clear"]);
+        let cli = Cli::parse_from(["svgfetch", "cache", "clear"]);
         assert!(matches!(
             cli.command,
             Some(Command::Cache(CacheCommand::Clear))
@@ -275,32 +275,38 @@ mod tests {
 
     #[test]
     fn no_subcommand_means_interactive() {
-        let cli = Cli::parse_from(["get-svg"]);
+        let cli = Cli::parse_from(["svgfetch"]);
         assert!(cli.command.is_none());
     }
 
     #[test]
     fn global_debug_flag() {
-        let cli = Cli::parse_from(["get-svg", "--debug", "version"]);
+        let cli = Cli::parse_from(["svgfetch", "--debug", "version"]);
         assert!(cli.debug);
     }
 
     #[test]
     fn parses_dlt_with_yes() {
-        let cli = Cli::parse_from(["get-svg", "dlt", "--yes"]);
-        assert!(matches!(cli.command, Some(Command::Dlt { yes: true })));
+        let cli = Cli::parse_from(["svgfetch", "dlt", "--yes"]);
+        assert!(matches!(cli.command, Some(Command::Uninstall { yes: true })));
+    }
+
+    #[test]
+    fn parses_uninstall_with_yes() {
+        let cli = Cli::parse_from(["svgfetch", "uninstall", "--yes"]);
+        assert!(matches!(cli.command, Some(Command::Uninstall { yes: true })));
     }
 
     #[test]
     fn parses_direct_brand_argument() {
-        let cli = Cli::parse_from(["get-svg", "amazon"]);
+        let cli = Cli::parse_from(["svgfetch", "amazon"]);
         assert!(cli.command.is_none());
         assert_eq!(cli.brand, vec!["amazon"]);
     }
 
     #[test]
     fn parses_multi_word_brand_arguments() {
-        let cli = Cli::parse_from(["get-svg", "amazon", "prime"]);
+        let cli = Cli::parse_from(["svgfetch", "amazon", "prime"]);
         assert!(cli.command.is_none());
         assert_eq!(cli.brand, vec!["amazon", "prime"]);
     }

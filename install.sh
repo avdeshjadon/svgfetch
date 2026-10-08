@@ -124,7 +124,7 @@ mkdir -p "$DIR"
 PRIMARY_BINPATH="$(find "$EXTRACTED" -type f -name "svgfetch" -o -type f -name "svgfetch.exe" -o -type f -name "get-svg" -o -type f -name "getsvg" 2>/dev/null | sed -n '1p')"
 [ -n "$PRIMARY_BINPATH" ] || { echo "error: archive did not contain an executable binary" >&2; exit 1; }
 
-for NAME in "$BIN" "svg-fetch" "get-svg" "getsvg"; do
+for NAME in "$BIN" "svg-fetch"; do
   BINPATH="$(find "$EXTRACTED" -type f -name "$NAME" -o -type f -name "$NAME.exe" 2>/dev/null | sed -n '1p')"
   if [ -z "$BINPATH" ]; then
     BINPATH="$PRIMARY_BINPATH"

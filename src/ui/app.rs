@@ -1040,7 +1040,10 @@ fn zip_stem(query: &str) -> String {
 
 /// Entry point used by `commands::dispatch`.
 pub fn run_interactive() -> Result<i32> {
-    let settings = Settings::load()?;
+    let mut settings = Settings::load()?;
+    if let Some(ctx) = crate::project::find_project_context() {
+        settings.download_dir = ctx.target_dir;
+    }
     let mut app = App::new(settings)?;
     let mut terminal = ratatui::init();
     let result = app.run(&mut terminal);

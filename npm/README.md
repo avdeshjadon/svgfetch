@@ -16,7 +16,7 @@ Or install globally:
 npm install -g svgfetch
 ```
 
-After installing, `svgfetch` (and aliases `svg-fetch`, `get-svg`, `getsvg`) are available:
+After installing, `svgfetch` (and alias `svg-fetch`) is available:
 
 ```bash
 # Launch interactive search
