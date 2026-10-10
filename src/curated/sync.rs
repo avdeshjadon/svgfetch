@@ -54,10 +54,16 @@ pub fn is_cache_expired() -> bool {
 
 /// Fetch manifest from CDN / GitHub raw, save to local cache, and update memory.
 pub async fn sync_curated_catalog(client: &Client) -> Result<Vec<CuratedEntry>> {
-    let res = match client.get(MANIFEST_CDN_URL).send().await {
+    // Try GitHub Raw first for real-time upstream changes (bypasses CDN propagation lag)
+    let res = match client
+        .get(MANIFEST_RAW_URL)
+        .header("Cache-Control", "no-cache")
+        .send()
+        .await
+    {
         Ok(r) if r.status().is_success() => r,
         _ => client
-            .get(MANIFEST_RAW_URL)
+            .get(MANIFEST_CDN_URL)
             .send()
             .await
             .map_err(|e| Error::Download(format!("Failed to fetch manifest: {e}")))?,
