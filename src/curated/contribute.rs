@@ -51,13 +51,25 @@ pub fn find_icons_repo_path() -> Option<PathBuf> {
 /// Classify a brand into its category folder.
 pub fn classify_brand_category(brand_name: &str) -> &'static str {
     let b = brand_name.to_lowercase();
-    if b.contains("google") || b.contains("android") || b.contains("chrome") || b.contains("youtube") {
+    if b.contains("google")
+        || b.contains("android")
+        || b.contains("chrome")
+        || b.contains("youtube")
+    {
         "google"
-    } else if b.contains("microsoft") || b.contains("azure") || b.contains("windows") || b.contains("vscode") {
+    } else if b.contains("microsoft")
+        || b.contains("azure")
+        || b.contains("windows")
+        || b.contains("vscode")
+    {
         "microsoft"
     } else if b.contains("adobe") || b.contains("photoshop") || b.contains("illustrator") {
         "adobe"
-    } else if b.contains("meta") || b.contains("facebook") || b.contains("instagram") || b.contains("whatsapp") {
+    } else if b.contains("meta")
+        || b.contains("facebook")
+        || b.contains("instagram")
+        || b.contains("whatsapp")
+    {
         "meta"
     } else if b.contains("apple") || b.contains("safari") || b.contains("swift") {
         "apple"
@@ -81,13 +93,29 @@ pub fn classify_brand_category(brand_name: &str) -> &'static str {
         || b.contains("commerce")
     {
         "e-commerce"
-    } else if b.contains("ai") || b.contains("gpt") || b.contains("claude") || b.contains("bot") || b.contains("neural") {
+    } else if b.contains("ai")
+        || b.contains("gpt")
+        || b.contains("claude")
+        || b.contains("bot")
+        || b.contains("neural")
+    {
         "ai"
-    } else if b.contains("db") || b.contains("sql") || b.contains("data") || b.contains("redis") || b.contains("mongo") {
+    } else if b.contains("db")
+        || b.contains("sql")
+        || b.contains("data")
+        || b.contains("redis")
+        || b.contains("mongo")
+    {
         "databases"
-    } else if b.contains("cloud") || b.contains("docker") || b.contains("kube") || b.contains("deploy") || b.contains("host") {
+    } else if b.contains("cloud")
+        || b.contains("docker")
+        || b.contains("kube")
+        || b.contains("deploy")
+        || b.contains("host")
+    {
         "devops"
-    } else if b.contains("social") || b.contains("chat") || b.contains("talk") || b.contains("meet") {
+    } else if b.contains("social") || b.contains("chat") || b.contains("talk") || b.contains("meet")
+    {
         "social"
     } else if b.contains("code") || b.contains("lang") || b.contains("script") {
         "languages"
@@ -204,7 +232,9 @@ fn record_contribution_log(
     variant: AssetVariant,
 ) {
     let log_path = repo_dir.join("CONTRIBUTIONS.md");
-    let now_str = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let now_str = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
     let variant_str = if variant == AssetVariant::Icon {
         "Icon Mark"
     } else {
@@ -235,4 +265,3 @@ fn record_contribution_log(
         }
     }
 }
-

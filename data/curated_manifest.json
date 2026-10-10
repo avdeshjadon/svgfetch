@@ -13727,6 +13727,15 @@
     ]
   },
   {
+    "name": "Zepto",
+    "shortname": "zepto",
+    "category": "e-commerce",
+    "url": "",
+    "files": [
+      "e-commerce/zepto.svg"
+    ]
+  },
+  {
     "name": "zeroheight",
     "shortname": "zeroheight",
     "category": "general",
