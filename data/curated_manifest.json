@@ -287,6 +287,16 @@
     ]
   },
   {
+    "name": "Amazon",
+    "shortname": "amazon",
+    "category": "amazon",
+    "url": "",
+    "files": [
+      "amazon/amazon-icon.svg",
+      "amazon/amazon.svg"
+    ]
+  },
+  {
     "name": "Amazon Chime",
     "shortname": "amazon-chime",
     "category": "amazon",
