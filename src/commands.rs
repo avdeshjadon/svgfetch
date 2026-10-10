@@ -173,7 +173,7 @@ pub struct DirectBrandArgs {
 }
 
 async fn handle_curated_brand(
-    entry: &'static crate::curated::CuratedEntry,
+    entry: &crate::curated::CuratedEntry,
     args: DirectBrandArgs,
     settings: &Settings,
 ) -> Result<i32> {
@@ -270,12 +270,29 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     let settings = Settings::load()?;
     let query_trim = args.query.trim();
 
-    // 1. Priority 1: Check curated svgfetch-icons CDN library
+    // 1. Priority 1: Check curated svgfetch-icons CDN library (in-memory or cached)
     if let Some(curated_entry) = crate::curated::find_curated_brand(query_trim) {
-        return handle_curated_brand(curated_entry, args, &settings).await;
+        return handle_curated_brand(&curated_entry, args, &settings).await;
     }
 
-    // 2. Priority 2: Not in curated library, fall back to Wikimedia Commons
+    // If query was not found, attempt a live sync from svgfetch-icons CDN
+    let sync_client = reqwest::Client::builder()
+        .user_agent(format!("svgfetch/{}", crate::VERSION))
+        .build();
+
+    if let Ok(client) = sync_client {
+        if crate::curated::sync_curated_catalog(&client).await.is_ok() {
+            if let Some(curated_entry) = crate::curated::find_curated_brand(query_trim) {
+                eprintln!(
+                    "[sync] Found \"{}\" after syncing with svgfetch-icons CDN.",
+                    curated_entry.name
+                );
+                return handle_curated_brand(&curated_entry, args, &settings).await;
+            }
+        }
+    }
+
+    // 2. Priority 2: Not in curated library even after sync, fall back to Wikimedia Commons
     eprintln!("[info] Not found in svgfetch-icons library. Searching Wikimedia Commons...");
 
     let provider = WikimediaClient::new(&settings)?;

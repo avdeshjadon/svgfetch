@@ -12,7 +12,8 @@
   },
   "scripts": {
     "postinstall": "node bin/install.js",
-    "bump": "node ../scripts/bump.js"
+    "bump": "node ../scripts/bump.js",
+    "sync-icons": "bash ../scripts/sync-manifest.sh"
   },
   "repository": {
     "type": "git",
