@@ -118,6 +118,9 @@ pub async fn auto_contribute_brand(
         brand_name, category, filename
     );
 
+    // Record addition in CONTRIBUTIONS.md log with exact timestamp and path
+    record_contribution_log(&repo_dir, brand_name, category, &filename, variant);
+
     // Run manifest generator in svgfetch-icons
     let manifest_script = repo_dir.join("scripts").join("generate-manifest.js");
     if manifest_script.exists() {
@@ -173,3 +176,45 @@ pub async fn auto_contribute_brand(
     eprintln!("[sync] Manifest updated and pushed to svgfetch-icons repository.");
     true
 }
+
+/// Append an entry to CONTRIBUTIONS.md tracking table in `svgfetch-icons`.
+fn record_contribution_log(
+    repo_dir: &Path,
+    brand_name: &str,
+    category: &str,
+    filename: &str,
+    variant: AssetVariant,
+) {
+    let log_path = repo_dir.join("CONTRIBUTIONS.md");
+    let now_str = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let variant_str = if variant == AssetVariant::Icon {
+        "Icon Mark"
+    } else {
+        "Full Logo"
+    };
+    let rel_path = format!("logos/{}/{}", category, filename);
+
+    let table_row = format!(
+        "| {} | {} | {} | `{}` | {} | Wikimedia Commons (Auto-Curated) |\n",
+        now_str, brand_name, category, rel_path, variant_str
+    );
+
+    if !log_path.exists() {
+        let initial_content = format!(
+            "# Asset Contribution & Curation Log\n\n\
+            This document tracks all new vector assets curated into the `svgfetch-icons` library.\n\n\
+            ## Curated Additions\n\n\
+            | Date & Time (UTC) | Brand | Category | File Path | Variant | Source |\n\
+            | :--- | :--- | :--- | :--- | :--- | :--- |\n\
+            {}",
+            table_row
+        );
+        let _ = std::fs::write(&log_path, initial_content);
+    } else {
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path) {
+            let _ = file.write_all(table_row.as_bytes());
+        }
+    }
+}
+
