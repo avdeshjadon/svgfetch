@@ -7,6 +7,7 @@
 pub mod catalog;
 pub mod contribute;
 pub mod download;
+pub mod remote;
 pub mod sync;
 
 pub use catalog::{
@@ -15,6 +16,7 @@ pub use catalog::{
 };
 pub use contribute::{auto_contribute_brand, classify_brand_category, find_icons_repo_path};
 pub use download::{download_curated_file, CDN_BASE_URL, RAW_BASE_URL};
+pub use remote::{report_remote_curation, trigger_remote_curation, RemoteCurationResult};
 pub use sync::{
     auto_sync_if_needed, is_cache_expired, manifest_cache_path, sync_curated_catalog,
     MANIFEST_CACHE_TTL, MANIFEST_CDN_URL, MANIFEST_RAW_URL,

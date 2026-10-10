@@ -269,6 +269,34 @@ pub enum Command {
         #[arg(long, short = 'f', value_enum, default_value_t = crate::output::OutputFormat::Table)]
         format: crate::output::OutputFormat,
     },
+
+    /// Suggest a missing brand for curation in the svgfetch-icons registry.
+    ///
+    /// Fires a GitHub Actions `repository_dispatch` event so the CI can
+    /// automatically fetch, validate, and commit the brand's SVG.
+    ///
+    /// Requires `SVGFETCH_GITHUB_TOKEN` (repo scope on svgfetch-icons).
+    ///
+    /// Example:
+    ///   svgfetch suggest "Notion"
+    ///   svgfetch suggest "Linear" --message "Used in our design system"
+    #[command(alias = "request")]
+    Suggest {
+        /// Brand name to curate (e.g. "Notion", "Linear", "Figma").
+        brand: String,
+
+        /// Optional note for the curation request (stored in the dispatch payload).
+        #[arg(long, short = 'm')]
+        message: Option<String>,
+
+        /// Override the auto-detected category (e.g. devops, ai, e-commerce).
+        #[arg(long, short = 'c')]
+        category: Option<String>,
+
+        /// Skip the remote dispatch and only print what would be sent.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]

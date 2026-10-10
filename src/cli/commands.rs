@@ -140,6 +140,12 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                 let effective_variant = variant.or(cli.variant);
                 cmd_info(&asset, effective_variant, format).await
             }
+            Command::Suggest {
+                brand,
+                message,
+                category,
+                dry_run,
+            } => cmd_suggest(&brand, message.as_deref(), category.as_deref(), dry_run).await,
         }
     } else if !cli.brand.is_empty() {
         let query = cli.brand.join(" ");
@@ -637,6 +643,69 @@ pub async fn cmd_info(
     }
 
     Ok(0)
+}
+
+/// Handle `svgfetch suggest <brand>` — request a missing brand be curated.
+async fn cmd_suggest(
+    brand: &str,
+    message: Option<&str>,
+    category_override: Option<&str>,
+    dry_run: bool,
+) -> Result<i32> {
+    let brand = brand.trim();
+    if brand.is_empty() {
+        eprintln!("[error] Brand name cannot be empty.");
+        return Ok(1);
+    }
+
+    // Auto-detect category unless overridden
+    let category =
+        category_override.unwrap_or_else(|| crate::curated::classify_brand_category(brand));
+
+    eprintln!(
+        "[info] Suggest request: \"{}\" (category: {})",
+        brand, category
+    );
+
+    if let Some(msg) = message {
+        eprintln!("[info] Note: {}", msg);
+    }
+
+    // Check if brand already exists in catalog
+    if let Some(entry) = crate::curated::find_curated_brand(brand) {
+        eprintln!(
+            "[info] \"{}\" is already in the svgfetch-icons registry (matched: \"{}\").",
+            brand, entry.name
+        );
+        eprintln!(
+            "[info] Run `svgfetch {}` to download it directly.",
+            brand.to_lowercase()
+        );
+        return Ok(0);
+    }
+
+    if dry_run {
+        eprintln!("[info] Dry run — would dispatch:");
+        eprintln!("  event_type  : curate-brand");
+        eprintln!("  brand       : {}", brand);
+        eprintln!("  category    : {}", category);
+        if let Some(msg) = message {
+            eprintln!("  message     : {}", msg);
+        }
+        eprintln!(
+            "[info] Set SVGFETCH_GITHUB_TOKEN and re-run without --dry-run to queue for curation."
+        );
+        return Ok(0);
+    }
+
+    let result = crate::curated::trigger_remote_curation(brand, category).await;
+    crate::curated::report_remote_curation(brand, &result);
+
+    match result {
+        crate::curated::RemoteCurationResult::Queued => Ok(0),
+        crate::curated::RemoteCurationResult::NoToken => Ok(0), // Not an error; just inform user
+        _ => Ok(1),
+    }
 }
 
 fn default_download_dir() -> PathBuf {
