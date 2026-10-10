@@ -12,11 +12,7 @@ use crate::security;
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-#[cfg(test)]
-/// Vector banner logo bundled into the binary from `public/images/full_logo_dark.svg`.
-const BANNER_SVG: &[u8] = include_bytes!("../../public/images/full_logo_dark.svg");
-
-/// Block-letter logo representing the SVG icon mark and SVGFETCH logotype from `full_logo_dark.svg` (14 lines).
+/// Block-letter logo representing the SVG icon mark and SVGFETCH logotype (14 lines).
 const LOGO: [&str; 14] = [
     "             ▄█ █",
     "            ▄██ ██▄",
@@ -41,16 +37,6 @@ fn spinner(t: &super::theme::Theme, frame: u64) -> &'static str {
     } else {
         "/"
     }
-}
-
-#[cfg(test)]
-/// Render the banner logo once and cache the result.
-///
-/// Returns `None` when the SVG cannot be rendered; callers fall back to the built-in block-letter logo.
-fn banner_logo_lines() -> &'static Option<Vec<Line<'static>>> {
-    use std::sync::OnceLock;
-    static LINES: OnceLock<Option<Vec<Line<'static>>>> = OnceLock::new();
-    LINES.get_or_init(|| super::preview::render_banner(BANNER_SVG, 66, 7))
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -267,16 +253,22 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
         let logo_block = Block::bordered().border_style(t.border_style());
         let mut logo_text = Text::default();
         logo_text.push_line(Line::default());
+
+        let logo_max_width = 130;
+        let pad_len = (chunk.width.saturating_sub(2).saturating_sub(logo_max_width) / 2) as usize;
+        let pad = " ".repeat(pad_len);
+
         for line in LOGO {
-            logo_text.push_line(Line::from(Span::styled(line, t.accent_style())));
+            logo_text.push_line(Line::from(Span::styled(
+                format!("{pad}{line}"),
+                t.accent_style(),
+            )));
         }
         logo_text.push_line(Line::default());
         logo_text.push_line(
             Line::from(Span::styled(crate::TAGLINE, t.dim_style())).alignment(Alignment::Center),
         );
-        let logo_para = Paragraph::new(logo_text)
-            .block(logo_block)
-            .alignment(Alignment::Center);
+        let logo_para = Paragraph::new(logo_text).block(logo_block);
         f.render_widget(logo_para, chunk);
     }
 
@@ -868,33 +860,5 @@ fn truncate_chars(s: &str, max: usize) -> String {
         let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
         out.push('…');
         out
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn banner_logo_lines_renders_embedded_svg() {
-        let lines = banner_logo_lines();
-        assert!(
-            lines.is_some(),
-            "Embedded full_logo_dark.svg must render successfully"
-        );
-        let lines = lines.as_ref().unwrap();
-        assert_eq!(
-            lines.len(),
-            7,
-            "Banner should render exactly 7 character rows"
-        );
-        let non_empty_spans = lines
-            .iter()
-            .flat_map(|l| &l.spans)
-            .any(|s| !s.content.trim().is_empty());
-        assert!(
-            non_empty_spans,
-            "Banner must contain rendered artwork spans"
-        );
     }
 }
