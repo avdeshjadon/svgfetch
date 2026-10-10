@@ -5,6 +5,7 @@
 //! vector assets directly from the global jsDelivr edge CDN.
 
 pub mod catalog;
+pub mod contribute;
 pub mod download;
 pub mod sync;
 
@@ -12,6 +13,7 @@ pub use catalog::{
     find_curated_brand, get_curated_catalog, update_in_memory_catalog, CuratedEntry,
     CuratedVariants,
 };
+pub use contribute::{auto_contribute_brand, classify_brand_category, find_icons_repo_path};
 pub use download::{download_curated_file, CDN_BASE_URL, RAW_BASE_URL};
 pub use sync::{
     auto_sync_if_needed, is_cache_expired, manifest_cache_path, sync_curated_catalog,

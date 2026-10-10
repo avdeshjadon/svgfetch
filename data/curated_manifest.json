@@ -8198,6 +8198,15 @@
     ]
   },
   {
+    "name": "Myntra",
+    "shortname": "myntra",
+    "category": "e-commerce",
+    "url": "",
+    "files": [
+      "e-commerce/myntra.svg"
+    ]
+  },
+  {
     "name": "MySQL",
     "shortname": "mysql",
     "category": "databases",
