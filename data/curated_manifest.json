@@ -13754,6 +13754,15 @@
     ]
   },
   {
+    "name": "Zomato",
+    "shortname": "zomato",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/zomato.svg"
+    ]
+  },
+  {
     "name": "Zoom",
     "shortname": "zoom",
     "category": "social",
