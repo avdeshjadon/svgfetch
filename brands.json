@@ -2345,6 +2345,14 @@
     "vimeo": {
       "name": "Vimeo",
       "file": "File:Vimeo logo.svg"
+    },
+    "zepto": {
+      "name": "Zepto",
+      "file": "File:Zepto Logo.svg",
+      "aliases": [
+        "zeptonow",
+        "zepto grocery"
+      ]
     }
   }
 }

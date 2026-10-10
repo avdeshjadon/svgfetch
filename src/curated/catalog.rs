@@ -110,10 +110,15 @@ pub fn find_curated_brand(query: &str) -> Option<CuratedEntry> {
         return Some(entry.clone());
     }
 
-    // 4. Prefix match if query length >= 4
+    // 4. Prefix match if query length >= 4 (avoid matching sub-products like "amazon-chime" for "amazon")
     if q.len() >= 4 {
         if let Some(entry) = catalog.iter().find(|e| {
-            e.shortname.to_lowercase().starts_with(&q_slug) || e.name.to_lowercase().starts_with(&q)
+            let s = e.shortname.to_lowercase();
+            if s.starts_with(&q_slug) && !s[q_slug.len()..].starts_with('-') {
+                return true;
+            }
+            let n = e.name.to_lowercase();
+            n.starts_with(&q) && !n[q.len()..].starts_with(' ')
         }) {
             return Some(entry.clone());
         }
