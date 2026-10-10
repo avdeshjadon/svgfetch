@@ -1,6 +1,22 @@
-# svgfetch
+<p align="center">
+  <img src="public/images/full_logo_dark.svg" alt="svgfetch" width="560" />
+</p>
 
-Terminal-first client for discovering, inspecting, and downloading SVG assets from Wikimedia Commons. Includes both an interactive vector terminal interface and a scriptable CLI.
+<p align="center">
+  <strong>Terminal-first client for discovering, inspecting, and downloading SVG assets from Wikimedia Commons.</strong>
+  <br>
+  Includes both an interactive vector terminal interface and a scriptable CLI.
+</p>
+
+<p align="center">
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#asset-variants">Asset Variants</a> •
+  <a href="#interactive-tui-mode">Interactive TUI</a> •
+  <a href="#commands">Commands</a>
+</p>
+
+---
 
 ## Installation
 

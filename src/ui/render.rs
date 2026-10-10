@@ -12,14 +12,26 @@ use crate::security;
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/// Block-letter logo. All six lines are exactly 70 characters wide.
-const LOGO: [&str; 6] = [
-    "███████╗ ██╗   ██╗ ██████╗      ███████╗███████╗████████╗ ██████╗ ██╗  ██╗",
-    "██╔════╝ ██║   ██║██╔════╝      ██╔════╝██╔════╝╚══██╔══╝██╔════╝ ██║  ██║",
-    "███████╗ ██║   ██║██║  ███╗     █████╗  █████╗     ██║   ██║      ███████║",
-    "╚════██║ ╚██╗ ██╔╝██║   ██║     ██╔══╝  ██╔══╝     ██║   ██║      ██╔══██║",
-    "███████║  ╚████╔╝ ╚██████╔╝     ██║     ███████╗   ██║   ╚██████╗ ██║  ██║",
-    "╚══════╝   ╚═══╝   ╚═════╝      ╚═╝     ╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝",
+#[cfg(test)]
+/// Vector banner logo bundled into the binary from `public/images/full_logo_dark.svg`.
+const BANNER_SVG: &[u8] = include_bytes!("../../public/images/full_logo_dark.svg");
+
+/// Block-letter logo representing the SVG icon mark and SVGFETCH logotype from `full_logo_dark.svg` (14 lines).
+const LOGO: [&str; 14] = [
+    "             ▄█ █",
+    "            ▄██ ██▄",
+    "          ▄████ ████",
+    "        ▄██████ █████▄                                                                                                 ▄▄▄▄",
+    "     ▄▄███▀▀███ ███▀███▄         █████████████ █████  █████ █████████████ █████████████             █████             █████",
+    "   ▄████▀   ▀▀  ███  ▀▀▀▀        █████▀▀▀▀▀▀▀▀ █████  █████ █████▀▀▀▀▀▀▀▀ █████▀▀▀▀▀▀▀▀▄▄▄▄▄▄▄▄▄▄ ▄▄█████▄▄ ▄▄▄▄▄▄▄▄▄ █████▄▄▄▄▄▄▄",
+    "▄██████████████ █████████████▄   █████▄▄▄▄▄▄▄▄ █████  █████ █████ ▄▄▄▄▄▄▄ █████▄▄▄▄▄▄  ██████████ █████████ █████████ ████████████",
+    "  ▀▀▀▀▀▀▀▀▀████ ███▀▀▀▀▀▀▀▀▀     █████████████ █████  █████ █████ ▄██████ ███████████  ████▄▄████   █████   ████      █████  █████",
+    "     ▀███▄ ████ ███                      █████ ▀█████▄█████ █████   █████ █████▀       ████▀▀▀▀▀▀   █████   ████      █████  █████",
+    "       ▀███▄███ ███              █████████████  ▀████████▀  █████████████ █████        ██████████   ██████▄ █████████ █████  █████",
+    "         ▀█████ ███              ▀▀▀▀▀▀▀▀▀▀▀▀▀    ▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀▀▀▀▀▀▀ █████        ▀▀▀▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀ ▀▀▀▀▀  ▀▀▀▀▀",
+    "          ▀████ ███                                                       █████",
+    "            ▀██ ██▀",
+    "             ▀▀ ▀",
 ];
 
 /// Spinner glyph for the current frame (static "/" when animations are off).
@@ -29,6 +41,16 @@ fn spinner(t: &super::theme::Theme, frame: u64) -> &'static str {
     } else {
         "/"
     }
+}
+
+#[cfg(test)]
+/// Render the banner logo once and cache the result.
+///
+/// Returns `None` when the SVG cannot be rendered; callers fall back to the built-in block-letter logo.
+fn banner_logo_lines() -> &'static Option<Vec<Line<'static>>> {
+    use std::sync::OnceLock;
+    static LINES: OnceLock<Option<Vec<Line<'static>>>> = OnceLock::new();
+    LINES.get_or_init(|| super::preview::render_banner(BANNER_SVG, 66, 7))
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -217,10 +239,10 @@ fn draw_too_small(f: &mut Frame, area: Rect) {
 
 fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;
-    let show_logo = area.height >= 17;
+    let show_logo = area.height >= 24;
     let (logo_chunk, input_chunk, hint_chunk) = if show_logo {
         let chunks = Layout::vertical([
-            Constraint::Length(11),
+            Constraint::Length(18),
             Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(1),
@@ -846,5 +868,33 @@ fn truncate_chars(s: &str, max: usize) -> String {
         let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
         out.push('…');
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn banner_logo_lines_renders_embedded_svg() {
+        let lines = banner_logo_lines();
+        assert!(
+            lines.is_some(),
+            "Embedded full_logo_dark.svg must render successfully"
+        );
+        let lines = lines.as_ref().unwrap();
+        assert_eq!(
+            lines.len(),
+            7,
+            "Banner should render exactly 7 character rows"
+        );
+        let non_empty_spans = lines
+            .iter()
+            .flat_map(|l| &l.spans)
+            .any(|s| !s.content.trim().is_empty());
+        assert!(
+            non_empty_spans,
+            "Banner must contain rendered artwork spans"
+        );
     }
 }
