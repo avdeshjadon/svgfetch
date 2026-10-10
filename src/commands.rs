@@ -172,14 +172,116 @@ pub struct DirectBrandArgs {
     pub verbose: bool,
 }
 
+async fn handle_curated_brand(
+    entry: &'static crate::curated::CuratedEntry,
+    args: DirectBrandArgs,
+    settings: &Settings,
+) -> Result<i32> {
+    let is_interactive = !args.dry_run && std::io::stdin().is_terminal();
+    let selected_file = crate::curated::select_variant(entry, args.variant_flag, is_interactive);
+
+    let (target_file, project_ctx) = match args.output {
+        Some(p) => {
+            let is_target_dir = p.is_dir()
+                || p.to_string_lossy().ends_with('/')
+                || p.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
+            let file_path = if is_target_dir {
+                p.join(&selected_file)
+            } else if p.extension().is_some() {
+                p
+            } else {
+                p.join(&selected_file)
+            };
+            (file_path, None)
+        }
+        None => {
+            let use_project = !args.no_project && settings.project_detection;
+            if use_project {
+                if let Some(ctx) = crate::project::find_project_context() {
+                    let path = ctx.target_dir.join(&selected_file);
+                    (path, Some(ctx))
+                } else {
+                    let base_dir = settings.download_dir.clone();
+                    (base_dir.join(&selected_file), None)
+                }
+            } else {
+                let base_dir = settings.download_dir.clone();
+                (base_dir.join(&selected_file), None)
+            }
+        }
+    };
+
+    let pretty_path = if let Some(ctx) = &project_ctx {
+        if let Ok(rel) = target_file.strip_prefix(&ctx.root) {
+            format!("./{}", rel.display())
+        } else {
+            crate::config::contract_tilde(&target_file)
+        }
+    } else {
+        crate::config::contract_tilde(&target_file)
+    };
+
+    if args.dry_run {
+        println!("Brand       : {}", entry.name);
+        println!("File        : {}", selected_file);
+        println!("Provider    : svgfetch-icons CDN");
+        println!(
+            "Source URL  : {}/{}",
+            crate::curated::CDN_BASE_URL,
+            selected_file
+        );
+        println!("Destination : {}", target_file.display());
+        return Ok(0);
+    }
+
+    if let Some(ctx) = &project_ctx {
+        eprintln!(
+            "[project] Target: {} ({})",
+            ctx.root_name(),
+            ctx.kind.display_name()
+        );
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent(format!("svgfetch/{}", crate::VERSION))
+        .build()
+        .map_err(|e| Error::Download(format!("HTTP client error: {}", e)))?;
+
+    eprintln!("[download] Fetching {} from CDN...", selected_file);
+    let bytes = crate::curated::download_curated_file(
+        &client,
+        &selected_file,
+        &target_file,
+        args.overwrite,
+    )
+    .await?;
+
+    eprintln!(
+        "[saved] {} ({})",
+        pretty_path,
+        crate::models::format_size(bytes)
+    );
+
+    Ok(0)
+}
+
 /// Instant direct brand/logo resolver and downloader with variant awareness.
 pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     let settings = Settings::load()?;
+    let query_trim = args.query.trim();
+
+    // 1. Priority 1: Check curated svgfetch-icons CDN library
+    if let Some(curated_entry) = crate::curated::find_curated_brand(query_trim) {
+        return handle_curated_brand(curated_entry, args, &settings).await;
+    }
+
+    // 2. Priority 2: Not in curated library, fall back to Wikimedia Commons
+    eprintln!("[info] Not found in svgfetch-icons library. Searching Wikimedia Commons...");
+
     let provider = WikimediaClient::new(&settings)?;
     let cache = Cache::new(&settings);
 
     let started = std::time::Instant::now();
-    let query_trim = args.query.trim();
 
     // 1. Resolve exact entity and variant
     let resolution = match crate::resolution::resolve_entity_and_variant(
@@ -204,20 +306,17 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
 
     if resolution.is_curated {
         if resolution.variant == crate::models::AssetVariant::Default {
-            eprintln!(
-                "\x1b[1;32m\u{2713}\x1b[0m Curated brand mapping: \x1b[1m{}\x1b[0m",
-                brand_name
-            );
+            eprintln!("[curated] Brand mapping: {}", brand_name);
         } else {
             eprintln!(
-                "\x1b[1;32m\u{2713}\x1b[0m Curated brand mapping: \x1b[1m{} ({})\x1b[0m",
+                "[curated] Brand mapping: {} ({})",
                 brand_name,
                 resolution.variant.as_str()
             );
         }
     } else {
         eprintln!(
-            "\x1b[1;32m\u{2713}\x1b[0m Best match: \x1b[1m{}\x1b[0m ({}% confidence, {})",
+            "[match] Best match: {} ({}% confidence, {})",
             asset.original_name,
             resolution.confidence,
             resolution.variant.as_str()
@@ -227,7 +326,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     // Smart hints if useful
     if let Some(hint) = crate::resolution::suggest_variants(&resolution) {
         if !args.dry_run && resolution.confidence < 90 {
-            eprintln!("\n\x1b[36m\u{2139} Hint:\x1b[0m\n{}\n", hint);
+            eprintln!("\n[hint] Hint:\n{}\n", hint);
         }
     }
 
@@ -259,7 +358,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
             if use_project {
                 if let Some(ctx) = crate::project::find_project_context() {
                     eprintln!(
-                        "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
+                        "[project] Detected {} project: {}",
                         ctx.kind.display_name(),
                         ctx.root_name()
                     );
@@ -313,7 +412,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
 
     if target_file.exists() && !args.overwrite {
         eprintln!(
-            "\x1b[1;33m\u{26A0}\x1b[0m File '{}' already exists. Use `--overwrite` to replace.",
+            "[warn] File '{}' already exists. Use `--overwrite` to replace.",
             pretty_path
         );
         return Ok(0);
@@ -354,7 +453,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
             let license = asset.license_or_unknown();
 
             eprintln!(
-                "\x1b[1;32m\u{2713} Saved to {}\x1b[0m ({}, {}) in {}",
+                "[saved] Saved to {} ({}, {}) in {}",
                 pretty_path,
                 size_human,
                 license,
@@ -363,7 +462,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
 
             if !resolution.is_curated {
                 eprintln!(
-                    "\x1b[2m💡 Tip: Want to curate this brand mapping? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch\x1b[0m"
+                    "[tip] Want to curate this brand mapping? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch"
                 );
             }
 
@@ -371,7 +470,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
         }
         crate::download::DownloadOutcome::Skipped => {
             eprintln!(
-                "\x1b[1;33m\u{26A0}\x1b[0m File '{}' already exists. Use `--overwrite` to replace.",
+                "[warn] File '{}' already exists. Use `--overwrite` to replace.",
                 pretty_path
             );
             Ok(0)
