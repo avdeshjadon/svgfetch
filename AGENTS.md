@@ -2,8 +2,8 @@
 
 > **CRITICAL INSTRUCTION**: This repository (`svg-fetch`) is part of a 3-repo ecosystem:
 > 1. `svg-fetch` (This repo: Rust CLI core)
-> 2. `svgfetch-icons` (`/Users/avdeshjadon/svgfetch-icons` / GitHub: `avdeshjadon/svgfetch-icons`)
-> 3. `svgfetch-frontend` (`/Users/avdeshjadon/svgfetch-frontend` / GitHub: `avdeshjadon/svgfetch-frontend`)
+> 2. `svgfetch-icons` (Sibling directory `../svgfetch-icons` / GitHub: `avdeshjadon/svgfetch-icons`)
+> 3. `svgfetch-frontend` (Sibling directory `../svgfetch-frontend` / GitHub: `avdeshjadon/svgfetch-frontend`)
 >
 > You MUST read [`ECOSYSTEM.md`](ECOSYSTEM.md) before making architectural changes.
 

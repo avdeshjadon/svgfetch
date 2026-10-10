@@ -7,45 +7,88 @@ This document governs the multi-repository architecture connecting **`svgfetch`*
 
 ---
 
-## 1. System Overview
+## 1. Quick Start: Contributor & Workspace Setup
 
-```
-                      +------------------------------------------+
-                      |         svgfetch CLI / Rust Core         |
-                      |  (Resolution Engine, Downloader, TUI)    |
-                      +-------------------+----------------------+
-                                          |
-                        Priority 1 Query  |  Fallback Auto-Curate
-                                          v
-+-------------------------------+   Sync / PR   +-------------------------------+
-|       svgfetch-icons          | <===========> |       Wikimedia Commons       |
-|  - 24+ Categorized Folders    |               |  - Global open asset source   |
-|  - manifest.json Index        |               |                               |
-|  - CONTRIBUTIONS.md Log       |               +-------------------------------+
-|  - jsDelivr / GitHub Raw CDN  |
-+---------------+---------------+
-                |
-                | CDN Delivery
-                v
-+-------------------------------+
-|      svgfetch-frontend        |
-|  - React + Vite Web App       |
-|  - Categorized Logo Library   |
-|  - Marquee Showcase & Search  |
-+-------------------------------+
+To develop or contribute across the ecosystem with automated synchronization, clone all three sibling repositories into the same parent workspace directory:
+
+```bash
+# 1. Create a root workspace folder anywhere on your system
+mkdir svgfetch-ecosystem && cd svgfetch-ecosystem
+
+# 2. Clone all three repositories side-by-side
+git clone https://github.com/avdeshjadon/svg-fetch.git
+git clone https://github.com/avdeshjadon/svgfetch-icons.git
+git clone https://github.com/avdeshjadon/svgfetch-frontend.git
 ```
 
-### The Three Repositories
+### Workspace Structure
 
-| Repository | Path | Role & Technology |
-| :--- | :--- | :--- |
-| **`svg-fetch`** | `/Users/avdeshjadon/svg-fetch` | **Core Engine & CLI** (Rust). Search, exact entity resolution, Wikimedia fallback, automatic curation, disk caching, and terminal UI. |
-| **`svgfetch-icons`** | `/Users/avdeshjadon/svgfetch-icons` | **Asset Registry & CDN Source** (Zero-dependency Git repo). Stores 1,960+ categorized SVGs, `manifest.json`, and `CONTRIBUTIONS.md`. |
-| **`svgfetch-frontend`** | `/Users/avdeshjadon/svgfetch-frontend` | **Web Showcase & Discovery Portal** (React 18 + Vite). Public web app allowing users to visually search, preview, and download icons via CDN. |
+```
+<workspace-root>/
+├── svg-fetch/            # Core Engine & Rust CLI
+├── svgfetch-icons/       # SVG Asset Registry & CDN Source
+└── svgfetch-frontend/    # React + Vite Web Showcase
+```
+
+> **Note**: If your local `svgfetch-icons` repository is located elsewhere, you can configure the path using the environment variable:
+> ```bash
+> export SVGFETCH_ICONS_REPO=/custom/path/to/svgfetch-icons
+> ```
 
 ---
 
-## 2. Synchronization Contracts
+## 2. System Overview & The Three Repositories
+
+```
+                                  [ User Terminal ]
+                                          |
+                                          v
+                              +-----------------------+
+                              |   svgfetch CLI (Rust)  |
+                              +-----------+-----------+
+                                          |
+                +-------------------------+-------------------------+
+                | Priority 1                                        | Priority 2 Fallback
+                v                                                   v
+    +-----------------------+                           +-----------------------+
+    |   Curated Library     |                           |   Wikimedia Commons   |
+    | (In-memory / Cache)   |                           |    (Direct Search)    |
+    +-----------+-----------+                           +-----------+-----------+
+                |                                                   |
+                | Cache Miss                                        | Asset Found
+                v                                                   v
+    +-----------------------+                           +-----------------------+
+    |  GitHub Raw Manifest  |                           |  Auto-Curation Engine |
+    |      (Live Sync)      |                           |   (contribute.rs)     |
+    +-----------+-----------+                           +-----------+-----------+
+                |                                                   |
+                +------------------------+--------------------------+
+                                         | Auto-save & Git commit
+                                         v
+                             +-----------------------+
+                             |    svgfetch-icons     |
+                             |  - logos/<category>/  |
+                             |  - manifest.json      |
+                             |  - CONTRIBUTIONS.md   |
+                             +-----------+-----------+
+                                         |
+                                         | GitHub Action & jsDelivr CDN
+                                         v
+                             +-----------------------+
+                             |   svgfetch-frontend   |
+                             |  (React 18 Discovery) |
+                             +-----------------------+
+```
+
+| Repository | Relative Path | Role & Technology |
+| :--- | :--- | :--- |
+| **`svg-fetch`** | `./svg-fetch` | **Core Engine & CLI** (Rust). Search, exact entity resolution, Wikimedia fallback, automatic curation, disk caching, and terminal UI. |
+| **`svgfetch-icons`** | `./svgfetch-icons` (sibling) | **Asset Registry & CDN Source** (Zero-dependency Git repo). Stores 1,960+ categorized SVGs, `manifest.json`, and `CONTRIBUTIONS.md`. |
+| **`svgfetch-frontend`** | `./svgfetch-frontend` (sibling) | **Web Showcase & Discovery Portal** (React 18 + Vite). Public web app allowing users to visually search, preview, and download icons via CDN. |
+
+---
+
+## 3. Synchronization Contracts
 
 ### Contract A: Asset Storage & Categorization (`svgfetch-icons`)
 - **Structure**: All SVG assets reside under `logos/<category>/<filename>.svg`.
@@ -53,7 +96,7 @@ This document governs the multi-repository architecture connecting **`svgfetch`*
   - Full wordmark/logo: `<brand-slug>.svg` (e.g., `logos/e-commerce/myntra.svg`)
   - Standalone icon mark: `<brand-slug>-icon.svg` (e.g., `logos/microsoft/github-icon.svg`)
 - **Manifest Index (`manifest.json`)**:
-  - Automatically produced by `node scripts/generate-manifest.js`.
+  - Automatically produced by `node scripts/generate-manifest.js` (or `npm run manifest`).
   - Maps each brand to `{ name, shortname, category, url, files: [ ... ] }`.
   - **Contract**: `files` array MUST contain relative paths including the category folder (e.g., `"e-commerce/myntra.svg"`).
 - **Curation Log (`CONTRIBUTIONS.md`)**:
@@ -61,13 +104,13 @@ This document governs the multi-repository architecture connecting **`svgfetch`*
 
 ### Contract B: CLI Resolution & Curation Pipeline (`svg-fetch`)
 - **Resolution Order**:
-  1. **Priority 1 (Curated CDN)**: Checks in-memory catalog -> local disk cache (`~/Library/Application Support/svgfetch/cache/curated_manifest.json`) -> bundled baseline (`data/curated_manifest.json`).
+  1. **Priority 1 (Curated CDN)**: Checks in-memory catalog -> local disk cache (`curated_manifest.json`) -> bundled baseline (`data/curated_manifest.json`).
   2. **Priority 1 Live Sync**: If not found in cache, fetches real-time `manifest.json` from `raw.githubusercontent.com` (bypassing CDN propagation lag).
   3. **Priority 2 (Wikimedia Fallback)**: If brand is not curated, resolves via Wikimedia Commons API.
 - **Auto-Contribution Pipeline (`src/curated/contribute.rs`)**:
   - When an asset is successfully downloaded from Wikimedia Commons:
     1. Classifies brand into proper category (e.g. `e-commerce`, `devops`, `fintech`, `social`, etc.).
-    2. Saves SVG into `svgfetch-icons/logos/<category>/<brand>.svg`.
+    2. Saves SVG into sibling `svgfetch-icons/logos/<category>/<brand>.svg`.
     3. Appends entry to `svgfetch-icons/CONTRIBUTIONS.md` with timestamp.
     4. Runs `node scripts/generate-manifest.js` to regenerate `manifest.json`.
     5. Syncs `svg-fetch/data/curated_manifest.json` and persistent disk cache.
@@ -85,7 +128,7 @@ This document governs the multi-repository architecture connecting **`svgfetch`*
 
 ---
 
-## 3. Mandatory Rules for Developers & AI Agents
+## 4. Mandatory Rules for Developers & AI Agents
 
 When working on any repository in this ecosystem, you MUST follow these steps:
 
@@ -99,7 +142,7 @@ When working on any repository in this ecosystem, you MUST follow these steps:
 
 ---
 
-## 4. CI/CD & Deployment Workflow
+## 5. CI/CD & Deployment Workflow
 
 ```
 [svgfetch-icons push to main]

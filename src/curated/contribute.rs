@@ -15,20 +15,34 @@ pub fn find_icons_repo_path() -> Option<PathBuf> {
         }
     }
 
-    // 2. Relative sibling directory from current working dir
+    // 2. Sibling directory relative to current working directory (e.g. ../svgfetch-icons)
     if let Ok(cwd) = std::env::current_dir() {
-        let sibling = cwd.parent().map(|p| p.join("svgfetch-icons"));
-        if let Some(s) = sibling {
-            if s.join("logos").exists() {
-                return Some(s);
+        if let Some(parent) = cwd.parent() {
+            let sibling = parent.join("svgfetch-icons");
+            if sibling.join("logos").exists() {
+                return Some(sibling);
             }
         }
     }
 
-    // 3. Known standard location on developer machine
-    let standard = PathBuf::from("/Users/avdeshjadon/svgfetch-icons");
-    if standard.join("logos").exists() {
-        return Some(standard);
+    // 3. Sibling directory relative to project root or current executable
+    if let Ok(exe_path) = std::env::current_exe() {
+        let mut cur = exe_path.as_path();
+        while let Some(parent) = cur.parent() {
+            let sibling = parent.join("svgfetch-icons");
+            if sibling.join("logos").exists() {
+                return Some(sibling);
+            }
+            cur = parent;
+        }
+    }
+
+    // 4. User's home directory (e.g. ~/svgfetch-icons)
+    if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+        let p = PathBuf::from(home).join("svgfetch-icons");
+        if p.join("logos").exists() {
+            return Some(p);
+        }
     }
 
     None
