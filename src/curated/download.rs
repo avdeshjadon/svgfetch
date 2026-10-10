@@ -74,5 +74,9 @@ pub async fn download_curated_file(
 }
 
 fn urlencoding_filename(filename: &str) -> String {
-    url::form_urlencoded::byte_serialize(filename.as_bytes()).collect()
+    filename
+        .split('/')
+        .map(|seg| url::form_urlencoded::byte_serialize(seg.as_bytes()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("/")
 }

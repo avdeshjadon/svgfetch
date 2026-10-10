@@ -12,6 +12,8 @@ pub struct CuratedEntry {
     pub name: String,
     pub shortname: String,
     #[serde(default)]
+    pub category: String,
+    #[serde(default)]
     pub url: String,
     pub files: Vec<String>,
 }

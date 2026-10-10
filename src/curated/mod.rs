@@ -60,8 +60,8 @@ pub fn select_variant(
                 entry.name
             );
             eprintln!("Select variant to download:");
-            eprintln!("  1) Normal logo ({}) [default]", full);
-            eprintln!("  2) Icon mark   ({})", icon);
+            eprintln!("  1) Normal logo ({}) [default]", leaf_name(full));
+            eprintln!("  2) Icon mark   ({})", leaf_name(icon));
             eprint!("Enter selection [1-2] (press Enter for normal): ");
             let _ = std::io::stderr().flush();
 
@@ -82,9 +82,14 @@ pub fn select_variant(
     let chosen = variants.full_file.unwrap_or_else(|| entry.files[0].clone());
     eprintln!(
         "[curated] Found \"{}\" in svgfetch-icons library: {}",
-        entry.name, chosen
+        entry.name,
+        leaf_name(&chosen)
     );
     chosen
+}
+
+fn leaf_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
 }
 
 #[cfg(test)]
@@ -115,15 +120,15 @@ mod tests {
         let variants = instagram.variants();
         assert!(variants.icon_file.is_some());
         assert!(variants.full_file.is_some());
-        assert_eq!(variants.icon_file.unwrap(), "instagram-icon.svg");
-        assert_eq!(variants.full_file.unwrap(), "instagram.svg");
+        assert!(variants.icon_file.unwrap().ends_with("instagram-icon.svg"));
+        assert!(variants.full_file.unwrap().ends_with("instagram.svg"));
     }
 
     #[test]
     fn handles_brands_with_single_variant() {
         let react = find_curated_brand("react").unwrap();
         let variants = react.variants();
-        assert_eq!(variants.full_file.unwrap(), "react.svg");
+        assert!(variants.full_file.unwrap().ends_with("react.svg"));
         assert!(variants.icon_file.is_none());
     }
 }

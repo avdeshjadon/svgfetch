@@ -179,6 +179,10 @@ async fn handle_curated_brand(
 ) -> Result<i32> {
     let is_interactive = !args.dry_run && std::io::stdin().is_terminal();
     let selected_file = crate::curated::select_variant(entry, args.variant_flag, is_interactive);
+    let leaf_name = std::path::Path::new(&selected_file)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&selected_file);
 
     let (target_file, project_ctx) = match args.output {
         Some(p) => {
@@ -186,11 +190,11 @@ async fn handle_curated_brand(
                 || p.to_string_lossy().ends_with('/')
                 || p.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
             let file_path = if is_target_dir {
-                p.join(&selected_file)
+                p.join(leaf_name)
             } else if p.extension().is_some() {
                 p
             } else {
-                p.join(&selected_file)
+                p.join(leaf_name)
             };
             (file_path, None)
         }
@@ -198,15 +202,15 @@ async fn handle_curated_brand(
             let use_project = !args.no_project && settings.project_detection;
             if use_project {
                 if let Some(ctx) = crate::project::find_project_context() {
-                    let path = ctx.target_dir.join(&selected_file);
+                    let path = ctx.target_dir.join(leaf_name);
                     (path, Some(ctx))
                 } else {
                     let base_dir = settings.download_dir.clone();
-                    (base_dir.join(&selected_file), None)
+                    (base_dir.join(leaf_name), None)
                 }
             } else {
                 let base_dir = settings.download_dir.clone();
-                (base_dir.join(&selected_file), None)
+                (base_dir.join(leaf_name), None)
             }
         }
     };
@@ -224,6 +228,9 @@ async fn handle_curated_brand(
     if args.dry_run {
         println!("Brand       : {}", entry.name);
         println!("File        : {}", selected_file);
+        if !entry.category.is_empty() {
+            println!("Category    : {}", entry.category);
+        }
         println!("Provider    : svgfetch-icons CDN");
         println!(
             "Source URL  : {}/{}",
