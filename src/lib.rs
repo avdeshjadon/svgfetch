@@ -1,4 +1,4 @@
-//! svgfetch — discover, inspect, and download SVG assets from Wikimedia Commons.
+//! svgfetch — discover, inspect, and download SVG assets from Wikimedia Commons and curated CDN.
 //!
 //! This crate is the library half of the `svgfetch` CLI. Everything the
 //! binaries do lives here so it can be tested in-process.
@@ -7,28 +7,21 @@
 // trait methods return owned values so callers can still spawn them.
 #![allow(async_fn_in_trait)]
 
+// Domain modules organized cleanly into focused subdirectories:
 pub mod api;
-pub mod archive;
-pub mod brands;
-pub mod cache;
 pub mod cli;
-pub mod commands;
-pub mod config;
+pub mod core;
 pub mod curated;
-pub mod doctor;
 pub mod download;
-pub mod error;
-pub mod logging;
-pub mod metadata;
-pub mod models;
-pub mod output;
-pub mod project;
 pub mod resolution;
-pub mod search;
-pub mod security;
+pub mod storage;
 pub mod ui;
-pub mod uninstall;
-pub mod update;
+
+// Transparent module-level re-exports for backward-compatibility across all internal & external crates:
+pub use cli::{commands, doctor, output, uninstall, update};
+pub use core::{config, error, logging, models, security};
+pub use resolution::{brands, search};
+pub use storage::{archive, cache, metadata, project};
 
 pub use models::AssetVariant;
 

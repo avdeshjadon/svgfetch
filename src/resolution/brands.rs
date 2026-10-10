@@ -69,7 +69,7 @@ impl BrandRegistry {
         let mut map: HashMap<String, BrandInfo> = HashMap::new();
 
         // 1. Built-in curated registry
-        const EMBEDDED: &str = include_str!("../brands.json");
+        const EMBEDDED: &str = include_str!("../../brands.json");
         if let Ok(parsed) = serde_json::from_str::<BrandFile>(EMBEDDED) {
             map.extend(parsed.brands);
         }
