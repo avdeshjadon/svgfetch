@@ -204,6 +204,17 @@ pub async fn auto_contribute_brand(
                     let _ = std::fs::copy(&manifest_source, sibling_data_manifest);
                 }
             }
+
+            // Update svgfetch-frontend public manifest if present
+            if let Some(parent) = repo_dir.parent() {
+                let sibling_frontend_manifest = parent
+                    .join("svgfetch-frontend")
+                    .join("public")
+                    .join("manifest.json");
+                if sibling_frontend_manifest.exists() {
+                    let _ = std::fs::copy(&manifest_source, sibling_frontend_manifest);
+                }
+            }
         }
     }
 
@@ -218,16 +229,19 @@ pub async fn auto_contribute_brand(
         .current_dir(&repo_dir)
         .output();
 
-    // Spawn push in background so user doesn't wait
-    let repo_dir_clone = repo_dir.clone();
-    tokio::spawn(async move {
-        let _ = Command::new("git")
-            .args(["push", "origin", "main"])
-            .current_dir(&repo_dir_clone)
-            .output();
-    });
+    // Push to origin main to ensure remote manifest and assets are immediately live
+    let push_success = Command::new("git")
+        .args(["push", "origin", "main"])
+        .current_dir(&repo_dir)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
 
-    eprintln!("[sync] Manifest updated and pushed to svgfetch-icons repository.");
+    if push_success {
+        eprintln!("[sync] Manifest updated and pushed to svgfetch-icons repository.");
+    } else {
+        eprintln!("[sync] Manifest updated locally in svgfetch-icons.");
+    }
     true
 }
 
