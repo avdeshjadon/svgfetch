@@ -130,7 +130,7 @@ for NAME in "$BIN" "svg-fetch"; do
     BINPATH="$PRIMARY_BINPATH"
   fi
   install -m 755 "$BINPATH" "$DIR/$NAME"
-  echo "> installed $DIR/$NAME ($VERSION)" >&2
+  echo "  ✓ [installed]  $DIR/$NAME ($VERSION)" >&2
 done
 
 if [ -x "$DIR/$BIN" ]; then
@@ -142,5 +142,15 @@ case ":$PATH:" in
   *) echo "> add $DIR to your PATH, e.g.: export PATH=\"$DIR:\$PATH\"" >&2 ;;
 esac
 
-echo "> done. Try:  svgfetch --help   or just:  svgfetch"
+echo "" >&2
+  echo "  ┌─────────────────────────────────────────────────────────────┐" >&2
+  echo "  │  svgfetch $VERSION is ready!                                   │" >&2
+  echo "  │                                                             │" >&2
+  echo "  │  Instant Vector Engine & Curated Icon Registry              │" >&2
+  echo "  │                                                             │" >&2
+  echo "  │  Quick Start:                                               │" >&2
+  echo "  │    svgfetch                Launch interactive vector search │" >&2
+  echo "  │    svgfetch amazon         Download Amazon vector directly  │" >&2
+  echo "  │    svgfetch --help         View documentation and options   │" >&2
+  echo "  └─────────────────────────────────────────────────────────────┘" >&2
 echo "$DIR"

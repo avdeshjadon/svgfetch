@@ -128,24 +128,27 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
         return Ok(0);
     }
 
-    println!("✗ svgfetch uninstall");
+    println!("  ┌─────────────────────────────────────────────────────────────┐");
+    println!("  │  svgfetch uninstall  ·  Purge tool, caches & binaries       │");
+    println!("  └─────────────────────────────────────────────────────────────┘");
     println!();
+    println!("  Targets identified for removal:");
     if let Some(p) = &plan.config_dir {
-        print_target("\u{2022} config", p, "settings, cache, recent searches");
+        print_target("config   ", p, "Settings, cache, and search index");
     }
     if let Some(p) = &plan.download_dir {
-        print_target("\u{2022} downloads", p, "SVGs downloaded by svgfetch");
+        print_target("downloads", p, "SVGs downloaded by svgfetch");
     }
     for b in &plan.binaries {
-        print_target("\u{2022} binary", b, "svgfetch");
+        print_target("binary   ", b, "Executable binary");
     }
     if plan.download_dir.is_none() && settings.download_dir.exists() {
         println!();
         println!(
-            "  \u{23fa} custom download directory left untouched (not named \"svgfetch\"):\n     {}",
+            "  [note] Custom download directory left untouched (not named \"svgfetch\"):\n         {}",
             settings.download_dir.display()
         );
-        println!("     Delete it manually if you also want those files removed.");
+        println!("         Delete it manually if you also want those files removed.");
     }
     println!();
 
@@ -156,85 +159,131 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
                     .into(),
             ));
         }
-        eprint!("Are you sure? This permanently deletes the files above and uninstalls svgfetch. [y/N] ");
+        eprint!("  Are you sure? This permanently deletes the files above. [y/N]: ");
         std::io::stderr().flush().ok();
         let mut line = String::new();
         std::io::stdin().read_line(&mut line)?;
         if !matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            println!("Uninstall cancelled.");
+            println!("  [cancelled] Uninstall cancelled.");
             return Ok(0);
         }
     }
+    println!();
 
-    remove_dir_report(&plan.config_dir, "config");
-    remove_dir_report(&plan.download_dir, "downloads");
+    // 1. Purge config & persistent caches with animated thinking ticker
+    animate_spinner("Purging configuration and persistent caches...", || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        remove_dir_report(&plan.config_dir, "Configuration & cache");
+    });
 
-    // Also remove global npm install if present
-    if let Ok(output) = std::process::Command::new("npm")
-        .args(["uninstall", "-g", "svgfetch", "@avdeshjadon/get-svg"])
-        .output()
-    {
-        if output.status.success() {
-            println!("\u{2713} uninstalled npm global package svgfetch");
-        }
-    }
+    // 2. Purge downloads
+    animate_spinner("Purging downloaded SVG asset cache...", || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        remove_dir_report(&plan.download_dir, "Downloaded assets");
+    });
 
-    if let Ok(cur) = std::env::current_exe() {
-        for bin in &plan.binaries {
-            if bin == &cur {
-                remove_running_binary(bin);
-            } else {
-                let removed = std::fs::remove_file(bin).is_ok();
-                println!(
-                    "{} {}",
-                    if removed {
-                        "\u{2713} removed"
-                    } else {
-                        "\u{2013} note"
-                    },
-                    bin.display()
-                );
+    // 3. Unregister npm global package
+    animate_spinner("Unregistering global npm packages...", || {
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        if let Ok(output) = std::process::Command::new("npm")
+            .args(["uninstall", "-g", "svgfetch", "@avdeshjadon/get-svg"])
+            .output()
+        {
+            if output.status.success() {
+                println!("  ✓ [unlinked]  Global npm package unregistered");
             }
         }
-    } else {
-        for bin in &plan.binaries {
-            let removed = std::fs::remove_file(bin).is_ok();
-            println!(
-                "{} {}",
-                if removed {
-                    "\u{2713} removed"
+    });
+
+    // 4. Unlink binaries
+    animate_spinner("Unlinking executable binaries and symlinks...", || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        if let Ok(cur) = std::env::current_exe() {
+            for bin in &plan.binaries {
+                if bin == &cur {
+                    remove_running_binary(bin);
                 } else {
-                    "\u{2013} note"
-                },
-                bin.display()
-            );
+                    let removed = std::fs::remove_file(bin).is_ok();
+                    if removed {
+                        println!("  ✓ [unlinked]  {}", bin.display());
+                    } else {
+                        println!("  – [skipped]   {}", bin.display());
+                    }
+                }
+            }
+        } else {
+            for bin in &plan.binaries {
+                let removed = std::fs::remove_file(bin).is_ok();
+                if removed {
+                    println!("  ✓ [unlinked]  {}", bin.display());
+                } else {
+                    println!("  – [skipped]   {}", bin.display());
+                }
+            }
         }
-    }
+    });
 
     println!();
-    println!("✓ svgfetch has been completely removed from this system.");
-    println!("  Reinstall anytime with:");
-    println!(
-        "    curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
-    );
+    println!("  ┌─────────────────────────────────────────────────────────────┐");
+    println!("  │  svgfetch has been completely removed from this system.     │");
+    println!("  │                                                             │");
+    println!("  │  Thank you for using svgfetch! Until next time!             │");
+    println!("  │                                                             │");
+    println!("  │  Reinstall anytime with:                                    │");
+    println!("  │    npm install -g svgfetch                                  │");
+    println!("  │    curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh │");
+    println!("  └─────────────────────────────────────────────────────────────┘");
+    println!();
     Ok(0)
 }
 
+fn animate_spinner<F, R>(msg: &str, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let is_tty = std::io::stderr().is_terminal();
+    if !is_tty {
+        return f();
+    }
+
+    let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let (tx, rx) = std::sync::mpsc::channel();
+    let msg_owned = msg.to_string();
+
+    let handle = std::thread::spawn(move || {
+        let mut i = 0;
+        while rx.try_recv().is_err() {
+            let frame = frames[i % frames.len()];
+            eprint!("\r  {} [cleaning] {} ", frame, msg_owned);
+            let _ = std::io::stderr().flush();
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            i += 1;
+        }
+    });
+
+    let res = f();
+    let _ = tx.send(());
+    let _ = handle.join();
+    eprint!("\r\x1b[2K");
+    let _ = std::io::stderr().flush();
+    res
+}
+
 fn print_target(label: &str, path: &Path, what: &str) {
-    println!("  {label}  {:<34}  \u{2013} {what}", path.display());
+    println!("  • {:<10} {:<38} \u{2013} {what}", label, path.display());
 }
 
 fn remove_dir_report(dir: &Option<PathBuf>, label: &str) {
     match dir {
-        None => println!("  \u{2013} {label} already gone"),
+        None => println!("  – [skipped]   {label} already removed"),
         Some(p) => {
             let res = std::fs::remove_dir_all(p);
             match res {
-                Ok(()) => println!("\u{2713} removed {label}  {}", p.display()),
+                Ok(()) => println!("  ✓ [deleted]   {label} removed  ({})", p.display()),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    println!("  \u{2013} {label} already gone")
+                    println!("  – [skipped]   {label} already removed")
                 }
-                Err(e) => println!("\u{2017} could not remove {label}  {}: {e}", p.display()),
+                Err(e) => println!("  ! [notice]    Could not remove {label} ({}): {e}", p.display()),
             }
         }
     }
