@@ -23,7 +23,9 @@ const DEFAULT_DOWNLOAD_NAME: &str = "svgfetch";
 #[derive(Debug, Clone)]
 pub struct UninstallPlan {
     pub config_dir: Option<PathBuf>,
+    pub extra_config_dirs: Vec<PathBuf>,
     pub download_dir: Option<PathBuf>,
+    pub extra_download_dirs: Vec<PathBuf>,
     pub binaries: Vec<PathBuf>,
 }
 
@@ -34,7 +36,13 @@ impl UninstallPlan {
         if let Some(p) = &self.config_dir {
             out.push(p.as_path());
         }
+        for p in &self.extra_config_dirs {
+            out.push(p.as_path());
+        }
         if let Some(p) = &self.download_dir {
+            out.push(p.as_path());
+        }
+        for p in &self.extra_download_dirs {
             out.push(p.as_path());
         }
         out.extend(self.binaries.iter().map(PathBuf::as_path));
@@ -56,6 +64,48 @@ pub fn collect_plan(settings: &Settings) -> UninstallPlan {
         let cargo_bin = home.join(".cargo").join("bin");
         if cargo_bin.exists() {
             extra_dirs.push(cargo_bin);
+        }
+
+        // Comprehensive discovery of configuration & cache directories across platforms (macOS + XDG)
+        for candidate in [
+            home.join(".config").join("svgfetch"),
+            home.join(".cache").join("svgfetch"),
+            home.join("Library")
+                .join("Application Support")
+                .join("svgfetch"),
+            home.join("Library").join("Caches").join("svgfetch"),
+            home.join(".config").join("get-svg"),
+            home.join(".cache").join("get-svg"),
+            home.join("Library")
+                .join("Application Support")
+                .join("get-svg"),
+            home.join("Library").join("Caches").join("get-svg"),
+        ] {
+            if candidate.exists() {
+                if plan.config_dir.is_none() {
+                    plan.config_dir = Some(candidate);
+                } else if plan.config_dir.as_ref() != Some(&candidate)
+                    && !plan.extra_config_dirs.contains(&candidate)
+                {
+                    plan.extra_config_dirs.push(candidate);
+                }
+            }
+        }
+
+        // Comprehensive discovery of default download directories
+        for dl in [
+            home.join("Downloads").join("svgfetch"),
+            home.join("Downloads").join("get-svg"),
+        ] {
+            if dl.exists() {
+                if plan.download_dir.is_none() {
+                    plan.download_dir = Some(dl);
+                } else if plan.download_dir.as_ref() != Some(&dl)
+                    && !plan.extra_download_dirs.contains(&dl)
+                {
+                    plan.extra_download_dirs.push(dl);
+                }
+            }
         }
     }
     let usr_local = PathBuf::from("/usr/local/bin");
@@ -115,7 +165,9 @@ fn collect_plan_with_exe(settings: &Settings, exe: Option<&Path>) -> UninstallPl
 
     UninstallPlan {
         config_dir,
+        extra_config_dirs: Vec::new(),
         download_dir,
+        extra_download_dirs: Vec::new(),
         binaries,
     }
 }
@@ -144,13 +196,22 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
     if let Some(p) = &plan.config_dir {
         print_target("config", p, "Settings, cache, and search index");
     }
+    for p in &plan.extra_config_dirs {
+        print_target("config", p, "Settings, cache, and search index");
+    }
     if let Some(p) = &plan.download_dir {
+        print_target("downloads", p, "SVGs downloaded by svgfetch");
+    }
+    for p in &plan.extra_download_dirs {
         print_target("downloads", p, "SVGs downloaded by svgfetch");
     }
     for b in &plan.binaries {
         print_target("binary", b, "Executable binary");
     }
-    if plan.download_dir.is_none() && settings.download_dir.exists() {
+    if plan.download_dir.is_none()
+        && plan.extra_download_dirs.is_empty()
+        && settings.download_dir.exists()
+    {
         println!();
         println!(
             "  {} Custom download directory left untouched (not named \"svgfetch\"):",
@@ -187,14 +248,28 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
     // 1. Purge config & persistent caches
     let lines = ui.step("Configuration & caches", 1, 4, || {
         std::thread::sleep(Duration::from_millis(150));
-        remove_dir_report(&plan.config_dir, "Configuration & cache")
+        let mut dirs = Vec::new();
+        if let Some(p) = &plan.config_dir {
+            dirs.push(p);
+        }
+        for p in &plan.extra_config_dirs {
+            dirs.push(p);
+        }
+        remove_dirs_report(&dirs, "Configuration & cache")
     });
     tally.add(&lines);
 
     // 2. Purge downloads
     let lines = ui.step("Downloaded assets", 2, 4, || {
         std::thread::sleep(Duration::from_millis(150));
-        remove_dir_report(&plan.download_dir, "Downloaded assets")
+        let mut dirs = Vec::new();
+        if let Some(p) = &plan.download_dir {
+            dirs.push(p);
+        }
+        for p in &plan.extra_download_dirs {
+            dirs.push(p);
+        }
+        remove_dirs_report(&dirs, "Downloaded assets")
     });
     tally.add(&lines);
 
@@ -217,28 +292,21 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
     let lines = ui.step("Executable binaries", 4, 4, || {
         std::thread::sleep(Duration::from_millis(150));
         let mut out = Vec::new();
-        if let Ok(cur) = std::env::current_exe() {
-            for bin in &plan.binaries {
-                if bin == &cur {
-                    if let Some(line) = remove_running_binary(bin) {
-                        out.push(line);
-                    }
-                } else {
-                    let removed = std::fs::remove_file(bin).is_ok();
-                    if removed {
-                        out.push(unlinked(bin));
-                    } else {
-                        out.push(LogLine::skipped(ui::tilde(bin)));
-                    }
+        let cur = std::env::current_exe().ok();
+        for bin in &plan.binaries {
+            if Some(bin) == cur.as_ref() {
+                if let Some(line) = remove_running_binary(bin) {
+                    out.push(line);
                 }
-            }
-        } else {
-            for bin in &plan.binaries {
+            } else {
                 let removed = std::fs::remove_file(bin).is_ok();
-                if removed {
+                if removed || !bin.exists() {
                     out.push(unlinked(bin));
                 } else {
-                    out.push(LogLine::skipped(ui::tilde(bin)));
+                    out.push(LogLine::notice(format!(
+                        "Could not remove {} (permission denied)",
+                        ui::tilde(bin)
+                    )));
                 }
             }
         }
@@ -283,23 +351,30 @@ fn print_target(label: &str, path: &Path, what: &str) {
     );
 }
 
-fn remove_dir_report(dir: &Option<PathBuf>, label: &str) -> Vec<LogLine> {
-    match dir {
-        None => vec![LogLine::skipped(format!("{label} already removed"))],
-        Some(p) => match std::fs::remove_dir_all(p) {
-            Ok(()) => vec![LogLine::ok(
+fn remove_dirs_report(dirs: &[&PathBuf], label: &str) -> Vec<LogLine> {
+    if dirs.is_empty() {
+        return vec![LogLine::ok("clean", format!("{label} already clean"))];
+    }
+    let mut out = Vec::new();
+    for p in dirs {
+        match std::fs::remove_dir_all(p) {
+            Ok(()) => out.push(LogLine::ok(
                 "deleted",
                 format!("{label} removed  ({})", ui::tilde(p)),
-            )],
+            )),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                vec![LogLine::skipped(format!("{label} already removed"))]
+                out.push(LogLine::ok(
+                    "clean",
+                    format!("{label} already clean  ({})", ui::tilde(p)),
+                ));
             }
-            Err(e) => vec![LogLine::notice(format!(
+            Err(e) => out.push(LogLine::notice(format!(
                 "Could not remove {label} ({}): {e}",
                 ui::tilde(p)
-            ))],
-        },
+            ))),
+        }
     }
+    out
 }
 
 /// The running binary cannot be deleted while executing on Windows, so we
@@ -413,7 +488,9 @@ mod tests {
     fn plan_targets_are_lowercased_safe() {
         let plan = UninstallPlan {
             config_dir: Some(PathBuf::from("/x/svgfetch")),
+            extra_config_dirs: Vec::new(),
             download_dir: None,
+            extra_download_dirs: Vec::new(),
             binaries: vec![PathBuf::from("/x/bin/svgfetch")],
         };
         let targets = plan.targets();
