@@ -73,6 +73,43 @@ pub async fn download_curated_file(
     Ok(bytes.len() as u64)
 }
 
+/// Fetch SVG bytes for a curated file (checks local svgfetch-icons repo first, then CDN/GitHub raw).
+pub async fn fetch_curated_bytes(filename: &str) -> Option<Vec<u8>> {
+    // 1. Check local repo if available
+    if let Some(repo_dir) = crate::curated::find_icons_repo_path() {
+        let local_path = repo_dir.join("logos").join(filename);
+        if let Ok(bytes) = std::fs::read(&local_path) {
+            return Some(bytes);
+        }
+    }
+
+    // 2. Fetch from CDN / GitHub raw
+    let client = reqwest::Client::builder()
+        .user_agent(format!("svgfetch/{}", crate::VERSION))
+        .build()
+        .ok()?;
+
+    let cdn_url = format!("{}/{}", CDN_BASE_URL, urlencoding_filename(filename));
+    if let Ok(res) = client.get(&cdn_url).send().await {
+        if res.status().is_success() {
+            if let Ok(bytes) = res.bytes().await {
+                return Some(bytes.to_vec());
+            }
+        }
+    }
+
+    let raw_url = format!("{}/{}", RAW_BASE_URL, urlencoding_filename(filename));
+    if let Ok(res) = client.get(&raw_url).send().await {
+        if res.status().is_success() {
+            if let Ok(bytes) = res.bytes().await {
+                return Some(bytes.to_vec());
+            }
+        }
+    }
+
+    None
+}
+
 fn urlencoding_filename(filename: &str) -> String {
     filename
         .split('/')

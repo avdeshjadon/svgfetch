@@ -145,6 +145,25 @@ svgfetch kali linux mascot
 
 If both query words and an explicit `--variant` flag are provided, the explicit CLI flag takes priority (e.g., `svgfetch instagram wordmark --variant icon` resolves to the Instagram icon).
 
+### Interactive Variant Selection & In-Terminal Preview
+
+When requesting a curated brand that has multiple assets available (such as a Full Logo and an Icon Mark) without an explicit `--variant` flag, SVGFetch prompts interactively:
+
+- Navigate variants using `↑` / `↓` arrow keys (or `j` / `k`, number keys).
+- Press **`v`** to render a 24-bit TrueColor ANSI vector preview directly inside your terminal, and launch an infinite-zoom retina vector window.
+- Press **Enter** to download the selected asset directly into your project's images directory.
+- Press **Esc** or **q** to cancel.
+
+### Suggest & Auto-Curate Missing Brands
+
+If a brand is not yet in the official registry, request automatic curation into `svgfetch-icons`:
+
+```sh
+# Queue brand for autonomous CI curation
+svgfetch suggest "Notion"
+svgfetch suggest "Linear" -m "Design system icons"
+```
+
 ---
 
 ## Exact Entity Matching

@@ -34,6 +34,34 @@ pub fn render_halfblocks(bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<V
     render_raster(bytes, max_cols, max_rows)
 }
 
+/// Render image bytes directly into an ANSI TrueColor terminal string with Unicode half-blocks.
+pub fn render_halfblocks_to_ansi(bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<String> {
+    let lines = render_halfblocks(bytes, max_cols, max_rows)?;
+    let mut out = String::new();
+    for line in lines {
+        for span in line.spans {
+            let mut style_seq = String::new();
+            if let Some(fg) = span.style.fg {
+                if let Color::Rgb(r, g, b) = fg {
+                    style_seq.push_str(&format!("\x1b[38;2;{};{};{}m", r, g, b));
+                }
+            }
+            if let Some(bg) = span.style.bg {
+                if let Color::Rgb(r, g, b) = bg {
+                    style_seq.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+                }
+            }
+            out.push_str(&style_seq);
+            out.push_str(&span.content);
+            if !style_seq.is_empty() {
+                out.push_str("\x1b[0m");
+            }
+        }
+        out.push('\n');
+    }
+    Some(out)
+}
+
 /// Render a dark-surface logo (e.g. `full_logo_dark.svg`) with transparent terminal background
 /// and automatic tight cropping so vector marks scale to their full crisp size on the search screen.
 pub fn render_banner(bytes: &[u8], max_cols: u16, max_rows: u16) -> Option<Vec<Line<'static>>> {

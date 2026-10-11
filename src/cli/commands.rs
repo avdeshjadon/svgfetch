@@ -197,7 +197,11 @@ async fn handle_curated_brand(
     settings: &Settings,
 ) -> Result<i32> {
     let is_interactive = !args.dry_run && std::io::stdin().is_terminal();
-    let selected_file = crate::curated::select_variant(entry, args.variant_flag, is_interactive);
+    let selected_file =
+        match crate::curated::select_variant(entry, args.variant_flag, is_interactive).await {
+            Some(f) => f,
+            None => return Ok(0),
+        };
     let leaf_name = std::path::Path::new(&selected_file)
         .file_name()
         .and_then(|n| n.to_str())
