@@ -86,7 +86,7 @@ pub fn update_in_memory_catalog(entries: Vec<CuratedEntry>) {
 /// Search for a brand in the curated catalog.
 pub fn find_curated_brand(query: &str) -> Option<CuratedEntry> {
     let q = query.trim().to_lowercase();
-    let q_slug = q.replace(' ', "-").replace('_', "-");
+    let q_slug = q.replace([' ', '_'], "-");
     let catalog = get_curated_catalog();
 
     // 1. Exact match on shortname
@@ -104,7 +104,7 @@ pub fn find_curated_brand(query: &str) -> Option<CuratedEntry> {
 
     // 3. Normalized name comparison
     if let Some(entry) = catalog.iter().find(|e| {
-        let name_clean = e.name.to_lowercase().replace(' ', "-").replace('_', "-");
+        let name_clean = e.name.to_lowercase().replace([' ', '_'], "-");
         name_clean == q_slug
     }) {
         return Some(entry.clone());

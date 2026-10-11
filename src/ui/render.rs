@@ -30,8 +30,6 @@ const LOGO: [&str; 14] = [
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-
-
 /// Spinner glyph for the current frame (static "/" when animations are off).
 fn spinner(t: &super::theme::Theme, frame: u64) -> &'static str {
     if t.animations {
@@ -303,10 +301,7 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
     let input = Paragraph::new(display).block(
         Block::bordered()
             .border_type(BorderType::Rounded)
-            .title(Span::styled(
-                " Search Vectors ",
-                t.title_style(),
-            ))
+            .title(Span::styled(" Search Vectors ", t.title_style()))
             .border_style(t.border_active_style()),
     );
     f.render_widget(input, input_chunk);
@@ -323,10 +318,7 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
         Span::styled("GitHub", t.accent_style()),
         Span::styled(", or ", t.dim_style()),
         Span::styled("React", t.accent_style()),
-        Span::styled(
-            " and press Enter to search.",
-            t.dim_style(),
-        ),
+        Span::styled(" and press Enter to search.", t.dim_style()),
     ]);
     f.render_widget(hint, hint_chunk);
 }
