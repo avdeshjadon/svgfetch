@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
 use indicatif::{ProgressBar, ProgressStyle};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
@@ -305,6 +305,130 @@ fn old_path(dest: &Path) -> PathBuf {
     PathBuf::from(os)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VersionCheckCache {
+    pub last_checked_secs: u64,
+    pub latest_version: String,
+}
+
+pub fn version_cache_file() -> PathBuf {
+    if let Ok(settings) = crate::config::Settings::load() {
+        settings.cache_dir().join("version_check.json")
+    } else {
+        std::env::temp_dir().join("svgfetch_version_check.json")
+    }
+}
+
+pub fn get_cached_latest_version() -> Option<String> {
+    let file = version_cache_file();
+    if !file.exists() {
+        return None;
+    }
+    let data = std::fs::read_to_string(file).ok()?;
+    let cache: VersionCheckCache = serde_json::from_str(&data).ok()?;
+    Some(cache.latest_version)
+}
+
+pub fn save_cached_latest_version(version: &str) {
+    let file = version_cache_file();
+    if let Some(parent) = file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let cache = VersionCheckCache {
+        last_checked_secs: now,
+        latest_version: version.to_string(),
+    };
+    if let Ok(data) = serde_json::to_string(&cache) {
+        let _ = std::fs::write(file, data);
+    }
+}
+
+/// Print pip-style update notice to stderr if a newer version is known.
+pub fn check_and_print_update_notice() {
+    let current = crate::VERSION;
+    if let Some(latest) = get_cached_latest_version() {
+        if version_cmp(current, &latest) == std::cmp::Ordering::Less {
+            eprintln!();
+            eprintln!(
+                "  \x1b[33m[notice]\x1b[0m A new release of svgfetch is available: \x1b[31mv{}\x1b[0m -> \x1b[32mv{}\x1b[0m",
+                current, latest
+            );
+            eprintln!(
+                "  \x1b[33m[notice]\x1b[0m To update, run: \x1b[1;36msvgfetch update\x1b[0m or \x1b[1;36mnpm install -g svgfetch\x1b[0m"
+            );
+            eprintln!();
+        }
+    }
+}
+
+/// Check if cache is older than 15 minutes.
+pub fn is_version_cache_stale() -> bool {
+    let file = version_cache_file();
+    if !file.exists() {
+        return true;
+    }
+    if let Ok(data) = std::fs::read_to_string(&file) {
+        if let Ok(cache) = serde_json::from_str::<VersionCheckCache>(&data) {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            return now.saturating_sub(cache.last_checked_secs) > 15 * 60;
+        }
+    }
+    true
+}
+
+pub fn spawn_background_version_check() {
+    if !is_version_cache_stale() {
+        return;
+    }
+    tokio::spawn(async {
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .user_agent(format!("svgfetch/{} (check)", crate::VERSION))
+            .build()
+        {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        if let Some(v) = fetch_upstream_main_version(&client).await {
+            save_cached_latest_version(&v);
+        }
+    });
+}
+
+pub fn extract_version_from_cargo_toml(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("version = \"") || trimmed.starts_with("version=\"") {
+            let parts: Vec<&str> = trimmed.split('"').collect();
+            if parts.len() >= 2 {
+                return Some(parts[1].to_string());
+            }
+        }
+    }
+    None
+}
+
+async fn fetch_upstream_main_version(client: &reqwest::Client) -> Option<String> {
+    let url = "https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/Cargo.toml";
+    let res = client
+        .get(url)
+        .header("Cache-Control", "no-cache")
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+        .ok()?;
+    let text = res.text().await.ok()?;
+    extract_version_from_cargo_toml(&text)
+}
+
 /// Run the self-update flow. Returns a process exit code.
 pub async fn run_update() -> Result<i32> {
     let current = crate::VERSION;
@@ -327,36 +451,81 @@ pub async fn run_update() -> Result<i32> {
         .user_agent(format!("svgfetch/{current} (self-update)"))
         .build()?;
 
-    let latest_url = format!("{}/releases/latest", api_root());
-    let response = client.get(&latest_url).send().await?;
-    if !response.status().is_success() {
-        return Err(Error::Http {
-            status: response.status().as_u16(),
-            detail: format!("could not fetch {latest_url}"),
-        });
-    }
-    let release: Release = response.json().await?;
-    let latest = release.tag_name.trim_start_matches('v').to_string();
+    // 1. Check upstream main branch version in Cargo.toml
+    let raw_main_version = fetch_upstream_main_version(&client).await;
 
-    if version_cmp(current, &latest) != std::cmp::Ordering::Less {
-        let note = if current == latest {
-            "already up to date"
-        } else {
-            "running a newer build than the latest release"
-        };
-        println!("✓ svgfetch v{current} is {note} (latest: v{latest})");
+    // 2. Fetch latest release from GitHub API
+    let latest_url = format!("{}/releases/latest", api_root());
+    let release_res = client.get(&latest_url).send().await;
+
+    let release: Option<Release> = match release_res {
+        Ok(r) if r.status().is_success() => r.json().await.ok(),
+        _ => None,
+    };
+
+    let latest = release
+        .as_ref()
+        .map(|r| r.tag_name.trim_start_matches('v').to_string());
+
+    // Scenario 1: Upstream main has a newer version than current
+    if let Some(ref main_ver) = raw_main_version {
+        if version_cmp(current, main_ver) == std::cmp::Ordering::Less {
+            save_cached_latest_version(main_ver);
+
+            let release_is_behind = match &latest {
+                Some(rel_ver) => version_cmp(rel_ver, main_ver) == std::cmp::Ordering::Less,
+                None => true,
+            };
+
+            if release_is_behind {
+                println!();
+                println!("  [notice] Version v{} was recently pushed to main and is currently building on GitHub Actions.", main_ver);
+                println!("           The release binaries are still compiling for all platforms.");
+                println!("           Please wait an estimated 3 to 5 minutes, then run `svgfetch update` again.");
+                println!();
+                return Ok(0);
+            }
+
+            if let Some(ref rel) = release {
+                let has_platform_asset = rel.assets.iter().any(|a| a.name == primary_asset || a.name == legacy_asset);
+                if !has_platform_asset {
+                    println!();
+                    println!("  [notice] Version v{} is currently building on GitHub Actions.", main_ver);
+                    println!("           The release binary for your platform ({triple}) is still compiling.");
+                    println!("           Please wait an estimated 3 to 5 minutes, then run `svgfetch update` again.");
+                    println!();
+                    return Ok(0);
+                }
+            }
+        }
+    }
+
+    // Scenario 2: No newer version on main or releases
+    let latest_ver_str = match &latest {
+        Some(l) => l.clone(),
+        None => {
+            println!("  ✓ svgfetch v{current} is already up to date.");
+            return Ok(0);
+        }
+    };
+
+    if version_cmp(current, &latest_ver_str) != std::cmp::Ordering::Less {
+        println!("  ✓ svgfetch v{current} is already up to date.");
         return Ok(0);
     }
 
+    let release = release.unwrap();
     let asset = release
         .assets
         .iter()
         .find(|a| a.name == primary_asset || a.name == legacy_asset)
         .ok_or_else(|| {
             Error::Other(format!(
-                "release v{latest} does not ship {primary_asset} for this platform"
+                "release v{} does not ship {} for your platform yet. Build may still be in progress; please try again in a few minutes.",
+                latest_ver_str, primary_asset
             ))
         })?;
+
     let asset_name = asset.name.clone();
     let checksum_name = format!("{asset_name}.sha256");
     let checksum_asset = release
@@ -365,13 +534,14 @@ pub async fn run_update() -> Result<i32> {
         .find(|a| a.name == checksum_name)
         .ok_or_else(|| {
             Error::Other(format!(
-                "release v{latest} is missing the checksum file {checksum_name}"
+                "release v{} is missing checksum {checksum_name}; build may still be finalizing.",
+                latest_ver_str
             ))
         })?;
 
     println!(
-        "✚ Updating svgfetch v{current} → v{latest} (installed in {})",
-        bin_dir.display()
+        "  [updating] Updating svgfetch v{} -> v{} (installed in {})",
+        current, latest_ver_str, bin_dir.display()
     );
 
     let tmp = tempfile::tempdir()?;
@@ -384,16 +554,15 @@ pub async fn run_update() -> Result<i32> {
         &asset_name,
     )
     .await?;
-    println!("✓ Downloaded {} ({})", format_size(bytes), asset_name);
+    println!("  ✓ [downloaded] Archive received ({}, {})", format_size(bytes), asset_name);
 
     let got = sha256_of(&archive_path)?;
     if got != expected {
         return Err(Error::Other(format!(
-            "checksum mismatch (expected {expected}, got {got}) — the download is \
-             corrupt or tampered with; aborting without touching your install."
+            "checksum mismatch (expected {expected}, got {got}) — aborting without touching your install."
         )));
     }
-    println!("✓ SHA-256 checksum verified");
+    println!("  ✓ [verified]   SHA-256 integrity verified");
 
     let extract_dir = tmp.path().join("pkg");
     std::fs::create_dir_all(&extract_dir)?;
@@ -419,33 +588,24 @@ pub async fn run_update() -> Result<i32> {
         }
     }
 
-    if installed.len() == 1 {
-        // Update the sibling alias too when the archive carries only one name.
-        println!("✓ Installed {}", installed[0]);
-    } else {
-        println!("✓ Installed {}", installed.join(", "));
-    }
+    println!("  ✓ [installed]  Binaries updated successfully ({})", installed.join(", "));
 
     for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
         let stale = bin_dir.join(format!("{name}{ext_bin}.old"));
-        if stale.exists() && std::fs::remove_file(&stale).is_err() {
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                let _ = std::process::Command::new("cmd")
-                    .creation_flags(0x0800_0000 | 0x0000_0008)
-                    .args(["/C", "del /q", &stale.to_string_lossy()])
-                    .spawn();
-            }
+        if stale.exists() {
+            let _ = std::fs::remove_file(&stale);
         }
     }
-    println!("✓ Old binaries removed");
 
-    println!(
-        "\n✓ Update complete. Restart svgfetch to use v{latest}.\n\
-         Installer one-liner (keeps this updated):\n  \
-         curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
-    );
+    save_cached_latest_version(&latest_ver_str);
+
+    println!();
+    println!("  ┌─────────────────────────────────────────────────────────────┐");
+    println!("  │  Successfully updated svgfetch from v{} to v{}!           │", current, latest_ver_str);
+    println!("  │                                                             │");
+    println!("  │  Restart your terminal or run `svgfetch` to start using it. │");
+    println!("  └─────────────────────────────────────────────────────────────┘");
+    println!();
     Ok(0)
 }
 

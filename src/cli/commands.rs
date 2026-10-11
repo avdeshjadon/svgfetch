@@ -22,6 +22,12 @@ use crate::{archive, doctor, search};
 
 /// Top-level dispatch. Returns a process exit code.
 pub async fn dispatch(cli: Cli) -> Result<i32> {
+    // Non-blocking pip-style version notice and background update check
+    if !matches!(cli.command, Some(Command::Update) | Some(Command::Uninstall { .. }) | Some(Command::Version)) {
+        crate::update::check_and_print_update_notice();
+        crate::update::spawn_background_version_check();
+    }
+
     if let Some(cmd) = cli.command {
         match cmd {
             Command::Search {
