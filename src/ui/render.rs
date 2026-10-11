@@ -3,7 +3,7 @@
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Clear, List, ListItem, Padding, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Clear, List, ListItem, Padding, Paragraph, Wrap};
 use ratatui::Frame;
 
 use super::app::{App, BatchUi, Screen, MIN_HEIGHT, MIN_WIDTH};
@@ -12,23 +12,7 @@ use crate::security;
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/// Block-letter logo representing the SVG icon mark and SVGFETCH logotype (14 lines).
-const LOGO: [&str; 14] = [
-    "             ▄█ █                                                                                                                 ",
-    "            ▄██ ██▄                                                                                                               ",
-    "          ▄████ ████                                                                                                              ",
-    "        ▄██████ █████▄                                                                                                 ▄▄▄▄       ",
-    "     ▄▄███▀▀███ ███▀███▄         █████████████ █████  █████ █████████████ █████████████             █████             █████       ",
-    "   ▄████▀   ▀▀  ███  ▀▀▀▀        █████▀▀▀▀▀▀▀▀ █████  █████ █████▀▀▀▀▀▀▀▀ █████▀▀▀▀▀▀▀▀▄▄▄▄▄▄▄▄▄▄ ▄▄█████▄▄ ▄▄▄▄▄▄▄▄▄ █████▄▄▄▄▄▄▄",
-    "▄██████████████ █████████████▄   █████▄▄▄▄▄▄▄▄ █████  █████ █████ ▄▄▄▄▄▄▄ █████▄▄▄▄▄▄  ██████████ █████████ █████████ ████████████",
-    "  ▀▀▀▀▀▀▀▀▀████ ███▀▀▀▀▀▀▀▀▀     █████████████ █████  █████ █████ ▄██████ ███████████  ████▄▄████   █████   ████      █████  █████",
-    "     ▀███▄ ████ ███                      █████ ▀█████▄█████ █████   █████ █████▀       ████▀▀▀▀▀▀   █████   ████      █████  █████",
-    "       ▀███▄███ ███              █████████████  ▀████████▀  █████████████ █████        ██████████   ██████▄ █████████ █████  █████",
-    "         ▀█████ ███              ▀▀▀▀▀▀▀▀▀▀▀▀▀    ▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀▀▀▀▀▀▀ █████        ▀▀▀▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀ ▀▀▀▀▀  ▀▀▀▀▀",
-    "          ▀████ ███                                                       █████                                                   ",
-    "            ▀██ ██▀                                                       █████                                                   ",
-    "             ▀▀ ▀                                                         ▀▀▀▀                                                    ",
-];
+
 
 /// Spinner glyph for the current frame (static "/" when animations are off).
 fn spinner(t: &super::theme::Theme, frame: u64) -> &'static str {
@@ -225,10 +209,10 @@ fn draw_too_small(f: &mut Frame, area: Rect) {
 
 fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;
-    let show_logo = area.height >= 24;
-    let (logo_chunk, input_chunk, hint_chunk) = if show_logo {
+    let show_hero = area.height >= 14;
+    let (hero_chunk, input_chunk, hint_chunk) = if show_hero {
         let chunks = Layout::vertical([
-            Constraint::Length(18),
+            Constraint::Length(5),
             Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(1),
@@ -248,42 +232,50 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
         (None, chunks[0], chunks[2])
     };
 
-    if let Some(chunk) = logo_chunk {
+    if let Some(chunk) = hero_chunk {
         f.render_widget(Clear, chunk);
-        let logo_block = Block::bordered().border_style(t.border_style());
-        let mut logo_text = Text::default();
-        logo_text.push_line(Line::default());
-
-        let logo_max_width = 130;
-        let pad_len = (chunk.width.saturating_sub(2).saturating_sub(logo_max_width) / 2) as usize;
-        let pad = " ".repeat(pad_len);
-
-        for line in LOGO {
-            logo_text.push_line(Line::from(Span::styled(
-                format!("{pad}{line}"),
-                t.accent_style(),
-            )));
-        }
-        logo_text.push_line(Line::default());
-        logo_text.push_line(
-            Line::from(Span::styled(crate::TAGLINE, t.dim_style())).alignment(Alignment::Center),
-        );
-        let logo_para = Paragraph::new(logo_text).block(logo_block);
-        f.render_widget(logo_para, chunk);
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(t.border_style());
+        let text = Text::from(vec![
+            Line::from(vec![
+                Span::styled("◆ ", t.accent_style()),
+                Span::styled(crate::APP_NAME, t.bold_accent()),
+                Span::styled(format!(" v{}", crate::VERSION), t.dim_style()),
+                Span::styled("  ·  Vector Engine & Curated Icon Registry", t.dim_style()),
+            ])
+            .alignment(Alignment::Center),
+            Line::from(Span::styled(
+                "Instant entity resolution  ·  1,970+ curated vector assets  ·  Wikimedia fallback",
+                t.dim_style(),
+            ))
+            .alignment(Alignment::Center),
+        ]);
+        let para = Paragraph::new(text)
+            .block(block)
+            .alignment(Alignment::Center);
+        f.render_widget(para, chunk);
     }
 
     let display = if app.input.is_empty() {
-        Line::from(Span::styled(
-            "Type a keyword (e.g. Amazon, GitHub, React)…",
-            t.dim_style(),
-        ))
+        Line::from(vec![
+            Span::styled("❯ ", t.accent_style()),
+            Span::styled(
+                "Type a brand name or keyword (e.g. Amazon, GitHub, React)…",
+                t.dim_style(),
+            ),
+        ])
     } else {
-        Line::from(Span::styled(app.input.clone(), t.text_style()))
+        Line::from(vec![
+            Span::styled("❯ ", t.accent_style()),
+            Span::styled(app.input.clone(), t.text_style()),
+        ])
     };
     let input = Paragraph::new(display).block(
         Block::bordered()
+            .border_type(BorderType::Rounded)
             .title(Span::styled(
-                " Search SVGs on Wikimedia Commons ",
+                " Search Vectors ",
                 t.title_style(),
             ))
             .border_style(t.border_active_style()),
@@ -292,19 +284,19 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
 
     let cursor_line = input_chunk;
     let x = cursor_x(&app.input);
-    f.set_cursor_position((cursor_line.x + x + 1, cursor_line.y + 1));
+    f.set_cursor_position((cursor_line.x + x + 3, cursor_line.y + 1));
 
     let hint = Line::from(vec![
-        Span::styled("Quick search: ", t.bold_accent()),
-        Span::styled("Type any keyword like ", t.text_style()),
+        Span::styled("Quick tips: ", t.bold_accent()),
+        Span::styled("Type any brand like ", t.dim_style()),
         Span::styled("Amazon", t.accent_style()),
-        Span::styled(", ", t.text_style()),
+        Span::styled(", ", t.dim_style()),
         Span::styled("GitHub", t.accent_style()),
-        Span::styled(", or ", t.text_style()),
+        Span::styled(", or ", t.dim_style()),
         Span::styled("React", t.accent_style()),
         Span::styled(
-            " and press Enter. All matching SVG icons will be shown.",
-            t.text_style(),
+            " and press Enter to search.",
+            t.dim_style(),
         ),
     ]);
     f.render_widget(hint, hint_chunk);
@@ -335,7 +327,8 @@ fn draw_searching(f: &mut Frame, area: Rect, app: &App) {
     let para = Paragraph::new(text)
         .block(
             Block::bordered()
-                .title(" Search ")
+                .border_type(BorderType::Rounded)
+                .title(Span::styled(" Search ", t.title_style()))
                 .border_style(t.border_active_style()),
         )
         .alignment(Alignment::Center);
@@ -345,8 +338,9 @@ fn draw_searching(f: &mut Frame, area: Rect, app: &App) {
 fn draw_results(f: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;
     let block = Block::bordered()
+        .border_type(BorderType::Rounded)
         .title(Span::styled(
-            format!(" Results — {}", app.assets.len()),
+            format!(" Results — {} match(es) ", app.assets.len()),
             t.title_style(),
         ))
         .border_style(t.border_style())
@@ -456,7 +450,7 @@ fn draw_results(f: &mut Frame, area: Rect, app: &App) {
         items.push(ListItem::new(Line::from(vec![
             Span::raw("     "),
             Span::styled(
-                format!("⬇ Download selected ({})", app.selected.len()),
+                format!("[download] Download selected ({})", app.selected.len()),
                 t.bold_accent(),
             ),
         ])));
@@ -464,7 +458,7 @@ fn draw_results(f: &mut Frame, area: Rect, app: &App) {
     items.push(ListItem::new(Line::from(vec![
         Span::raw("     "),
         Span::styled(
-            "⬇ Download all files as complete ZIP (or press 'z')",
+            "[download] Download all files as complete ZIP (or press 'z')",
             t.bold_accent(),
         ),
     ])));
@@ -495,6 +489,7 @@ fn draw_zip_confirm(f: &mut Frame, area: Rect, app: &App) {
 
     f.render_widget(Clear, rect);
     let block = Block::bordered()
+        .border_type(BorderType::Rounded)
         .title(Span::styled(" Download All Files as ZIP ", t.title_style()))
         .border_style(t.border_active_style())
         .padding(Padding::uniform(1));
@@ -568,7 +563,7 @@ fn draw_details(f: &mut Frame, area: Rect, app: &App) {
 
     if asset.license.is_none() {
         lines.push(Line::from(Span::styled(
-            "  ⚠ License unknown — verify on Wikimedia Commons before reuse.",
+            "  [warn] License unknown — verify on Wikimedia Commons before reuse.",
             t.warn_style(),
         )));
     }
@@ -631,6 +626,7 @@ fn draw_details(f: &mut Frame, area: Rect, app: &App) {
     ]));
 
     let detail_block = Block::bordered()
+        .border_type(BorderType::Rounded)
         .title(Span::styled(
             format!(
                 " SVG Details — {} of {} ",
@@ -648,6 +644,7 @@ fn draw_details(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(details_p, chunks[0]);
 
     let action_block = Block::bordered()
+        .border_type(BorderType::Rounded)
         .title(Span::styled(" Download ", t.title_style()))
         .border_style(t.border_active_style())
         .padding(Padding::horizontal(1));

@@ -115,27 +115,41 @@ fn write_table(out: &mut dyn Write, assets: &[Asset]) -> Result<()> {
     // Clamp name column so 80-column terminals stay usable.
     widths[1] = widths[1].min(60);
 
-    let mut sep = String::new();
-    sep.push('+');
-    for w in widths {
-        sep.push_str(&"-".repeat(w + 2));
-        sep.push('+');
-    }
-    sep.push('\n');
+    let mut top = String::new();
+    top.push('┌');
+    let mut mid = String::new();
+    mid.push('├');
+    let mut bot = String::new();
+    bot.push('└');
 
-    writeln!(out, "{}", sep.trim_end())?;
+    for (i, w) in widths.iter().enumerate() {
+        top.push_str(&"─".repeat(w + 2));
+        mid.push_str(&"─".repeat(w + 2));
+        bot.push_str(&"─".repeat(w + 2));
+        if i + 1 < widths.len() {
+            top.push('┬');
+            mid.push('┼');
+            bot.push('┴');
+        } else {
+            top.push('┐');
+            mid.push('┤');
+            bot.push('┘');
+        }
+    }
+
+    writeln!(out, "{top}")?;
     write_row(out, &headers.map(String::from), &widths)?;
-    writeln!(out, "{}", sep.trim_end())?;
+    writeln!(out, "{mid}")?;
     for row in &rows {
         write_row(out, row, &widths)?;
     }
-    writeln!(out, "{}", sep.trim_end())?;
+    writeln!(out, "{bot}")?;
     Ok(())
 }
 
 fn write_row(out: &mut dyn Write, cells: &[String], widths: &[usize]) -> Result<()> {
     let mut line = String::new();
-    line.push_str("| ");
+    line.push_str("│ ");
     for (i, cell) in cells.iter().enumerate() {
         let w = widths[i];
         let visible = truncate_visible(cell, w);
@@ -143,7 +157,7 @@ fn write_row(out: &mut dyn Write, cells: &[String], widths: &[usize]) -> Result<
         for _ in visible.chars().count()..w {
             line.push(' ');
         }
-        line.push_str(" | ");
+        line.push_str(" │ ");
     }
     writeln!(out, "{}", line.trim_end())?;
     Ok(())
