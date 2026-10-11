@@ -6483,6 +6483,15 @@
     ]
   },
   {
+    "name": "Jio",
+    "shortname": "jio",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/jio.svg"
+    ]
+  },
+  {
     "name": "JIRA",
     "shortname": "jira",
     "category": "tools",
@@ -10298,15 +10307,6 @@
     "url": "https://github.com/vercel/release",
     "files": [
       "general/release.svg"
-    ]
-  },
-  {
-    "name": "Reliance",
-    "shortname": "reliance",
-    "category": "general",
-    "url": "",
-    "files": [
-      "general/reliance.svg"
     ]
   },
   {
