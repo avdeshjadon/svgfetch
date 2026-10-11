@@ -4462,6 +4462,15 @@
     ]
   },
   {
+    "name": "Flipkart",
+    "shortname": "flipkart",
+    "category": "e-commerce",
+    "url": "",
+    "files": [
+      "e-commerce/flipkart.svg"
+    ]
+  },
+  {
     "name": "Flood IO",
     "shortname": "floodio",
     "category": "general",
@@ -6483,12 +6492,12 @@
     ]
   },
   {
-    "name": "Jio",
-    "shortname": "jio",
+    "name": "Jio TV",
+    "shortname": "jiotv",
     "category": "general",
     "url": "",
     "files": [
-      "general/jio.svg"
+      "general/jiotv.svg"
     ]
   },
   {
@@ -6681,6 +6690,15 @@
     "url": "https://www.kaiostech.com/",
     "files": [
       "general/kaios.svg"
+    ]
+  },
+  {
+    "name": "Kali Linux",
+    "shortname": "kali-linux",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/kali-linux.svg"
     ]
   },
   {
@@ -12400,6 +12418,15 @@
     "url": "https://turretcss.com/",
     "files": [
       "general/turret.svg"
+    ]
+  },
+  {
+    "name": "Tux",
+    "shortname": "tux",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/tux.svg"
     ]
   },
   {
