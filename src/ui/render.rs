@@ -10,6 +10,24 @@ use super::app::{App, BatchUi, Screen, MIN_HEIGHT, MIN_WIDTH};
 use crate::models::format_size;
 use crate::security;
 
+/// Block-letter logo representing the SVG icon mark and SVGFETCH logotype from `full_logo_dark.svg` (14 lines).
+const LOGO: [&str; 14] = [
+    "             ▄█ █",
+    "            ▄██ ██▄",
+    "          ▄████ ████",
+    "        ▄██████ █████▄                                                                                                 ▄▄▄▄",
+    "     ▄▄███▀▀███ ███▀███▄         █████████████ █████  █████ █████████████ █████████████             █████             █████",
+    "   ▄████▀   ▀▀  ███  ▀▀▀▀        █████▀▀▀▀▀▀▀▀ █████  █████ █████▀▀▀▀▀▀▀▀ █████▀▀▀▀▀▀▀▀▄▄▄▄▄▄▄▄▄▄ ▄▄█████▄▄ ▄▄▄▄▄▄▄▄▄ █████▄▄▄▄▄▄▄",
+    "▄██████████████ █████████████▄   █████▄▄▄▄▄▄▄▄ █████  █████ █████ ▄▄▄▄▄▄▄ █████▄▄▄▄▄▄  ██████████ █████████ █████████ ████████████",
+    "  ▀▀▀▀▀▀▀▀▀████ ███▀▀▀▀▀▀▀▀▀     █████████████ █████  █████ █████ ▄██████ ███████████  ████▄▄████   █████   ████      █████  █████",
+    "     ▀███▄ ████ ███                      █████ ▀█████▄█████ █████   █████ █████▀       ████▀▀▀▀▀▀   █████   ████      █████  █████",
+    "       ▀███▄███ ███              █████████████  ▀████████▀  █████████████ █████        ██████████   ██████▄ █████████ █████  █████",
+    "         ▀█████ ███              ▀▀▀▀▀▀▀▀▀▀▀▀▀    ▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀▀▀▀▀▀▀ █████        ▀▀▀▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀ ▀▀▀▀▀  ▀▀▀▀▀",
+    "          ▀████ ███                                                       █████",
+    "            ▀██ ██▀",
+    "             ▀▀ ▀",
+];
+
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 
@@ -209,10 +227,10 @@ fn draw_too_small(f: &mut Frame, area: Rect) {
 
 fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;
-    let show_hero = area.height >= 14;
-    let (hero_chunk, input_chunk, hint_chunk) = if show_hero {
+    let show_logo = area.height >= 24;
+    let (logo_chunk, input_chunk, hint_chunk) = if show_logo {
         let chunks = Layout::vertical([
-            Constraint::Length(5),
+            Constraint::Length(18),
             Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(1),
@@ -232,37 +250,40 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
         (None, chunks[0], chunks[2])
     };
 
-    if let Some(chunk) = hero_chunk {
+    if let Some(chunk) = logo_chunk {
         f.render_widget(Clear, chunk);
-        let block = Block::bordered()
+        let mut logo_block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(t.border_style());
-        let mut hero_spans = vec![
-            Span::styled("◆ ", t.accent_style()),
-            Span::styled(crate::APP_NAME, t.bold_accent()),
-            Span::styled(format!(" v{}", crate::VERSION), t.dim_style()),
-            Span::styled("  ·  Vector Engine & Curated Icon Registry", t.dim_style()),
-        ];
+
         if let Some(latest) = crate::update::get_cached_latest_version() {
             if crate::update::version_cmp(crate::VERSION, &latest) == std::cmp::Ordering::Less {
-                hero_spans.push(Span::styled(
-                    format!("  ·  v{} available!", latest),
-                    ratatui::style::Style::default().fg(ratatui::style::Color::Yellow),
+                logo_block = logo_block.title(Span::styled(
+                    format!(" [notice: v{} available! Run `svgfetch update`] ", latest),
+                    Style::default().fg(Color::Yellow),
                 ));
             }
         }
-        let text = Text::from(vec![
-            Line::from(hero_spans).alignment(Alignment::Center),
-            Line::from(Span::styled(
-                "Instant entity resolution  ·  1,970+ curated vector assets  ·  Wikimedia fallback",
-                t.dim_style(),
-            ))
-            .alignment(Alignment::Center),
-        ]);
-        let para = Paragraph::new(text)
-            .block(block)
-            .alignment(Alignment::Center);
-        f.render_widget(para, chunk);
+
+        let mut logo_text = Text::default();
+        logo_text.push_line(Line::default());
+
+        let logo_max_width = 130;
+        let pad_len = (chunk.width.saturating_sub(2).saturating_sub(logo_max_width) / 2) as usize;
+        let pad = " ".repeat(pad_len);
+
+        for line in LOGO {
+            logo_text.push_line(Line::from(Span::styled(
+                format!("{pad}{line}"),
+                t.accent_style(),
+            )));
+        }
+        logo_text.push_line(Line::default());
+        logo_text.push_line(
+            Line::from(Span::styled(crate::TAGLINE, t.dim_style())).alignment(Alignment::Center),
+        );
+        let logo_para = Paragraph::new(logo_text).block(logo_block);
+        f.render_widget(logo_para, chunk);
     }
 
     let display = if app.input.is_empty() {
