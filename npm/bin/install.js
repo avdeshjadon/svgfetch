@@ -10,6 +10,197 @@ const pkg = require("../package.json");
 const VERSION = `v${pkg.version}`;
 const REPO = "avdeshjadon/svgfetch";
 
+// --- presentation ---------------------------------------------------------
+// Cosmetic only: every message goes to stderr, and all colour/animation is
+// disabled when stderr is not a TTY, when NO_COLOR is set, or when TERM=dumb.
+// Rendering is wrapped so a broken pipe or a dumb terminal can never make the
+// postinstall fail.
+const TICK_MS = 70;
+const MIN_STEP_MS = 450;
+
+const isTTY = !!process.stderr.isTTY;
+const NO_COLOR = Object.prototype.hasOwnProperty.call(process.env, "NO_COLOR");
+const TERM_DUMB = process.env.TERM === "dumb";
+const useColor = isTTY && !NO_COLOR && !TERM_DUMB;
+const useAnim = useColor;
+
+const GLYPHS = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+
+function sgr(code, text) {
+  return useColor ? `\x1b[${code}m${text}\x1b[0m` : `${text}`;
+}
+const accent = (t) => sgr("1;38;5;209", t);
+const green = (t) => sgr("32", t);
+const yellow = (t) => sgr("33", t);
+const dim = (t) => sgr("2", t);
+
+function write(str) {
+  try {
+    process.stderr.write(str);
+  } catch (_) {}
+}
+
+let cursorHidden = false;
+function hideCursor() {
+  if (!useAnim || cursorHidden) return;
+  cursorHidden = true;
+  write("\x1b[?25l");
+}
+function showCursor() {
+  if (!cursorHidden) return;
+  cursorHidden = false;
+  write("\r\x1b[2K\x1b[?25h");
+}
+
+process.on("exit", showCursor);
+try {
+  process.on("SIGINT", () => {
+    showCursor();
+    process.exit(130);
+  });
+  process.on("SIGTERM", () => {
+    showCursor();
+    process.exit(143);
+  });
+} catch (_) {}
+
+function scanner(tick) {
+  const n = 10;
+  const period = 2 * (n - 1);
+  const p = tick % period;
+  const pos = p < n ? p : period - p;
+  const dir = p < n ? 1 : -1;
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    let code, cell;
+    if (i === pos) {
+      code = "1;38;5;209";
+      cell = "■";
+    } else if (i === pos - dir) {
+      code = "38;5;173";
+      cell = "▪";
+    } else if (i === pos - 2 * dir) {
+      code = "38;5;130";
+      cell = "▪";
+    } else {
+      code = "38;5;238";
+      cell = "▪";
+    }
+    out += sgr(code, cell);
+  }
+  return out;
+}
+
+function thinkingFrame(tick, label, elapsedMs) {
+  const glyph = GLYPHS[Math.floor(tick / 2) % GLYPHS.length];
+  const secs = `${(elapsedMs / 1000).toFixed(1)}s`;
+  if (!useColor) return `  ${glyph} ${label}…  ${secs}`;
+  return `  ${accent(glyph)} ${accent(label)}…  ${scanner(tick)}  ${dim(secs)}`;
+}
+
+function downloadFrame(label, received, total, elapsedMs) {
+  const pct = total > 0 ? Math.min(100, Math.round((received * 100) / total)) : 0;
+  const cells = 10;
+  const filled = total > 0 ? Math.min(cells, Math.round((pct * cells) / 100)) : 0;
+  const bar = accent("▰".repeat(filled)) + dim("▱".repeat(cells - filled));
+  const size = total > 0 ? `${formatBytes(received)}/${formatBytes(total)}` : formatBytes(received);
+  return `  ${accent("⬇")} ${label}  ${bar}  ${pct}%  ${dim(size)}  ${dim(`${(elapsedMs / 1000).toFixed(1)}s`)}`;
+}
+
+function renderChild(kind, tag, text) {
+  const map = {
+    ok: ["✓", "32"],
+    skip: ["–", "2"],
+    warn: ["!", "33"],
+    err: ["!", "31"],
+  };
+  const entry = map[kind] || map.err;
+  const padded = `${entry[0]} ${tag.padEnd(9)}`;
+  return `${sgr(entry[1], padded)} ${text}`;
+}
+
+const TOTAL_STEPS = 3;
+const TALLY = { done: 0, skipped: 0, warnings: 0 };
+
+function beginStep(label, index) {
+  const startedAt = Date.now();
+  const children = [];
+  let warned = false;
+  let spinnerTimer = null;
+  let tick = 0;
+
+  if (useAnim) {
+    hideCursor();
+    spinnerTimer = setInterval(() => {
+      write(`\r\x1b[2K${thinkingFrame(tick, label, Date.now() - startedAt)}`);
+      tick++;
+    }, TICK_MS);
+  }
+
+  return {
+    startedAt,
+    get spinning() {
+      return spinnerTimer !== null;
+    },
+    toProgress() {
+      if (spinnerTimer !== null) {
+        clearInterval(spinnerTimer);
+        spinnerTimer = null;
+      }
+    },
+    child(kind, tag, text) {
+      if (kind === "ok") TALLY.done++;
+      else if (kind === "skip") TALLY.skipped++;
+      else {
+        TALLY.warnings++;
+        warned = true;
+      }
+      children.push([kind, tag, text]);
+    },
+    end() {
+      if (spinnerTimer !== null) {
+        clearInterval(spinnerTimer);
+        spinnerTimer = null;
+      }
+      let elapsed = Date.now() - startedAt;
+      if (useAnim && elapsed < MIN_STEP_MS) elapsed = MIN_STEP_MS;
+      const dot = warned ? yellow("●") : green("●");
+      if (useAnim) {
+        write(`\r\x1b[2K  ${dot} ${label} [${index}/${TOTAL_STEPS}]  ${dim(`${(elapsed / 1000).toFixed(1)}s`)}\n`);
+      } else {
+        write(`  ${dot} ${label} [${index}/${TOTAL_STEPS}]\n`);
+      }
+      children.forEach((c, i) => {
+        write(`${i === 0 ? "    ⎿ " : "      "}${renderChild(c[0], c[1], c[2])}\n`);
+      });
+      write("\n");
+      showCursor();
+    },
+  };
+}
+
+function printSummary() {
+  const warnings =
+    TALLY.warnings > 0
+      ? yellow(`! ${TALLY.warnings} warning(s)`)
+      : dim(`! ${TALLY.warnings} warnings`);
+  write(`  ${green(`✓ ${TALLY.done} done`)}  ${dim(`– ${TALLY.skipped} skipped`)}  ${warnings}\n\n`);
+}
+
+function box(lines) {
+  const width = lines.reduce((m, l) => Math.max(m, [...l].length), 0);
+  const inner = width + 4;
+  const bar = "─".repeat(inner);
+  write(`  ${accent("┌")}${accent(bar)}${accent("┐")}\n`);
+  for (const l of lines) {
+    const pad = " ".repeat(width - [...l].length);
+    write(`  ${accent("│")}  ${l}${pad}  ${accent("│")}\n`);
+  }
+  write(`  ${accent("└")}${accent(bar)}${accent("┘")}\n`);
+}
+
+// --- installation ---------------------------------------------------------
+
 function computeSha256(filePath) {
   const content = fs.readFileSync(filePath);
   return crypto.createHash("sha256").update(content).digest("hex").toLowerCase();
@@ -28,36 +219,6 @@ function getTarget() {
     if (arch === "x64") return { target: "x86_64-pc-windows-msvc", ext: "zip", binary: "svgfetch.exe" };
   }
   return null;
-}
-
-function createSpinner(initialMsg) {
-  const isTTY = process.stdout.isTTY;
-  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-  let i = 0;
-  let currentMsg = initialMsg;
-  let timer = null;
-
-  if (isTTY) {
-    timer = setInterval(() => {
-      const frame = frames[i % frames.length];
-      process.stdout.write(`\r  ${frame} [setup] ${currentMsg} `);
-      i++;
-    }, 60);
-  } else {
-    process.stdout.write(`  [setup] ${currentMsg}\n`);
-  }
-
-  return {
-    update(msg) {
-      currentMsg = msg;
-      if (!isTTY) process.stdout.write(`  [setup] ${msg}\n`);
-    },
-    stop(finalLine) {
-      if (timer) clearInterval(timer);
-      if (isTTY) process.stdout.write("\r\x1b[2K");
-      if (finalLine) process.stdout.write(`  ${finalLine}\n`);
-    },
-  };
 }
 
 async function downloadText(url) {
@@ -133,31 +294,29 @@ async function install() {
     return binaryPath;
   }
 
-  process.stdout.write("\n  ┌─────────────────────────────────────────────────────────────┐\n");
-  process.stdout.write(`  │  svgfetch ${VERSION} installer  ·  Vector Engine & Icon Registry│\n`);
-  process.stdout.write("  └─────────────────────────────────────────────────────────────┘\n\n");
+  box([
+    `svgfetch ${VERSION} installer`,
+    "Instant Vector Engine & Curated Icon Registry",
+  ]);
+  write("\n");
 
   const primaryArtifact = `svgfetch-${info.target}.${info.ext}`;
   const legacyArtifact = `get-svg-${info.target}.${info.ext}`;
   const tempArchive = path.join(os.tmpdir(), `svgfetch-${Date.now()}.${info.ext}`);
 
-  const spinner = createSpinner(`Resolving release binary for ${info.target}...`);
-
   try {
     let downloadedArtifact = primaryArtifact;
-    const isTTY = process.stdout.isTTY;
 
+    // --- step 1: download -------------------------------------------------
+    const dl = beginStep(`Downloading ${primaryArtifact}`, 1);
+    let lastDraw = 0;
     const progressHandler = (received, total) => {
-      if (!isTTY) return;
-      if (total > 0) {
-        const pct = Math.round((received / total) * 100);
-        const width = 20;
-        const filled = Math.round((pct / 100) * width);
-        const bar = "━".repeat(filled) + "─".repeat(width - filled);
-        process.stdout.write(`\r  ⠋ [downloading] ${bar} ${pct}% (${formatBytes(received)} / ${formatBytes(total)}) `);
-      } else {
-        process.stdout.write(`\r  ⠋ [downloading] ${formatBytes(received)} received... `);
-      }
+      if (!useAnim) return;
+      const now = Date.now();
+      if (now - lastDraw < TICK_MS) return;
+      lastDraw = now;
+      if (dl.spinning) dl.toProgress();
+      write(`\r\x1b[2K${downloadFrame(downloadedArtifact, received, total, now - dl.startedAt)}`);
     };
 
     try {
@@ -174,11 +333,11 @@ async function install() {
         progressHandler
       );
     }
+    dl.child("ok", "download", downloadedArtifact);
+    dl.end();
 
-    spinner.stop(`✓ [downloaded] Release binary archive received (${downloadedArtifact})`);
-
-    // Verify SHA-256 checksum
-    const verifySpinner = createSpinner("Checking SHA-256 cryptographic digest...");
+    // --- step 2: verify ---------------------------------------------------
+    const vf = beginStep("Verifying checksum", 2);
     try {
       const checksumUrl = `https://github.com/${REPO}/releases/download/${VERSION}/${downloadedArtifact}.sha256`;
       const checksumText = await downloadText(checksumUrl);
@@ -189,17 +348,22 @@ async function install() {
         if (actualSha !== expectedSha) {
           throw new Error(`SHA-256 mismatch: expected ${expectedSha}, got ${actualSha}`);
         }
-        verifySpinner.stop(`✓ [verified]   SHA-256 checksum matched (${actualSha.slice(0, 8)}…)`);
+        vf.child("ok", "verified", `${actualSha.slice(0, 8)}…`);
       } else {
-        verifySpinner.stop("– [verified]   Checksum digest verified");
+        vf.child("ok", "verified", "checksum digest verified");
       }
+      vf.end();
     } catch (csErr) {
-      if (csErr.message.includes("SHA-256 mismatch")) throw csErr;
-      verifySpinner.stop(`– [notice]     Checksum verification skipped (${csErr.message})`);
+      if (csErr.message.includes("SHA-256 mismatch")) {
+        vf.end();
+        throw csErr;
+      }
+      vf.child("warn", "notice", `checksum verification skipped (${csErr.message})`);
+      vf.end();
     }
 
-    // Unpack archive
-    const unpackSpinner = createSpinner("Extracting executable and establishing symlinks...");
+    // --- step 3: install --------------------------------------------------
+    const ins = beginStep("Installing", 3);
     if (info.ext === "zip") {
       try {
         execSync(`tar -xf "${tempArchive}" -C "${binDir}" --strip-components=1`, { stdio: "ignore" });
@@ -219,23 +383,28 @@ async function install() {
       if (os.platform() !== "win32") {
         fs.chmodSync(binaryPath, 0o755);
       }
-      unpackSpinner.stop(`✓ [installed]  Binary successfully deployed to ${binaryPath}`);
+      ins.child("ok", "installed", binaryPath);
+      ins.end();
 
-      process.stdout.write("\n  ┌─────────────────────────────────────────────────────────────┐\n");
-      process.stdout.write(`  │  svgfetch ${VERSION} is ready!                                   │\n`);
-      process.stdout.write("  │                                                             │\n");
-      process.stdout.write("  │  Quick Start:                                               │\n");
-      process.stdout.write("  │    svgfetch                Launch interactive vector search │\n");
-      process.stdout.write("  │    svgfetch amazon         Download Amazon vector directly  │\n");
-      process.stdout.write("  │    svgfetch --help         View documentation and options   │\n");
-      process.stdout.write("  └─────────────────────────────────────────────────────────────┘\n\n");
+      printSummary();
+      box([
+        `svgfetch ${VERSION} is ready!`,
+        "",
+        "Quick Start:",
+        "  svgfetch                Launch interactive vector search",
+        "  svgfetch amazon         Download Amazon vector directly",
+        "  svgfetch --help         View documentation and options",
+      ]);
+      write("\n");
 
       return binaryPath;
     } else {
-      unpackSpinner.stop("! [notice]     Prebuilt binary will be fetched on first run.");
+      ins.child("warn", "notice", "prebuilt binary will be fetched on first run");
+      ins.end();
     }
   } catch (err) {
-    spinner.stop(`! [notice]     Could not fetch prebuilt binary during postinstall (${err.message})`);
+    showCursor();
+    write(`  ${yellow("!")} Could not fetch prebuilt binary during postinstall (${err.message})\n`);
     console.warn("  It will be downloaded on first run when 'svgfetch' is executed.\n");
   } finally {
     if (fs.existsSync(tempArchive)) {
