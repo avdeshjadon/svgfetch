@@ -62,7 +62,7 @@ pub fn collect_plan(settings: &Settings) -> UninstallPlan {
     }
 
     for dir in extra_dirs {
-        for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
+        for name in ["svg", "svgfetch", "svg-fetch", "get-svg", "getsvg"] {
             let path = dir.join(format!("{name}{ext}"));
             if path.exists() && !plan.binaries.contains(&path) {
                 plan.binaries.push(path);
@@ -98,7 +98,7 @@ fn collect_plan_with_exe(settings: &Settings, exe: Option<&Path>) -> UninstallPl
     let mut binaries = Vec::new();
     if let Some(exe) = exe {
         if let Some(dir) = exe.parent() {
-            for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
+            for name in ["svg", "svgfetch", "svg-fetch", "get-svg", "getsvg"] {
                 let path = dir.join(format!("{name}{ext}"));
                 if path.exists() {
                     binaries.push(path);

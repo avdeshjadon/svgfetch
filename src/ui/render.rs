@@ -237,14 +237,22 @@ fn draw_search_input(f: &mut Frame, area: Rect, app: &App) {
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(t.border_style());
+        let mut hero_spans = vec![
+            Span::styled("◆ ", t.accent_style()),
+            Span::styled(crate::APP_NAME, t.bold_accent()),
+            Span::styled(format!(" v{}", crate::VERSION), t.dim_style()),
+            Span::styled("  ·  Vector Engine & Curated Icon Registry", t.dim_style()),
+        ];
+        if let Some(latest) = crate::update::get_cached_latest_version() {
+            if crate::update::version_cmp(crate::VERSION, &latest) == std::cmp::Ordering::Less {
+                hero_spans.push(Span::styled(
+                    format!("  ·  v{} available!", latest),
+                    ratatui::style::Style::default().fg(ratatui::style::Color::Yellow),
+                ));
+            }
+        }
         let text = Text::from(vec![
-            Line::from(vec![
-                Span::styled("◆ ", t.accent_style()),
-                Span::styled(crate::APP_NAME, t.bold_accent()),
-                Span::styled(format!(" v{}", crate::VERSION), t.dim_style()),
-                Span::styled("  ·  Vector Engine & Curated Icon Registry", t.dim_style()),
-            ])
-            .alignment(Alignment::Center),
+            Line::from(hero_spans).alignment(Alignment::Center),
             Line::from(Span::styled(
                 "Instant entity resolution  ·  1,970+ curated vector assets  ·  Wikimedia fallback",
                 t.dim_style(),

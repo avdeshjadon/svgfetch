@@ -22,12 +22,30 @@ use crate::{archive, doctor, search};
 
 /// Top-level dispatch. Returns a process exit code.
 pub async fn dispatch(cli: Cli) -> Result<i32> {
-    // Non-blocking pip-style version notice and background update check
-    if !matches!(cli.command, Some(Command::Update) | Some(Command::Uninstall { .. }) | Some(Command::Version)) {
+    let is_special = matches!(
+        cli.command,
+        Some(Command::Update) | Some(Command::Uninstall { .. }) | Some(Command::Version)
+    );
+
+    let check_task = if !is_special {
+        Some(tokio::spawn(async {
+            crate::update::run_background_version_check().await;
+        }))
+    } else {
+        None
+    };
+
+    let result = dispatch_inner(cli).await;
+
+    if let Some(task) = check_task {
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(350), task).await;
         crate::update::check_and_print_update_notice();
-        crate::update::spawn_background_version_check();
     }
 
+    result
+}
+
+async fn dispatch_inner(cli: Cli) -> Result<i32> {
     if let Some(cmd) = cli.command {
         match cmd {
             Command::Search {

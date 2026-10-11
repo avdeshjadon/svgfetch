@@ -71,7 +71,7 @@ fn archive_ext() -> &'static str {
 }
 
 /// Compare two dotted versions (`0.1.1` vs `0.2.0`). Missing components are 0.
-fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+pub fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let parse = |v: &str| -> Vec<u64> {
         v.split('.')
             .map(|p| {
@@ -354,11 +354,11 @@ pub fn check_and_print_update_notice() {
         if version_cmp(current, &latest) == std::cmp::Ordering::Less {
             eprintln!();
             eprintln!(
-                "  \x1b[33m[notice]\x1b[0m A new release of svgfetch is available: \x1b[31mv{}\x1b[0m -> \x1b[32mv{}\x1b[0m",
+                "  \x1b[1;33m[notice]\x1b[0m A new release of svgfetch is available: \x1b[31mv{}\x1b[0m -> \x1b[32mv{}\x1b[0m",
                 current, latest
             );
             eprintln!(
-                "  \x1b[33m[notice]\x1b[0m To update, run: \x1b[1;36msvgfetch update\x1b[0m or \x1b[1;36mnpm install -g svgfetch\x1b[0m"
+                "  \x1b[1;33m[notice]\x1b[0m To update, run: \x1b[1;36msvgfetch update\x1b[0m"
             );
             eprintln!();
         }
@@ -383,23 +383,83 @@ pub fn is_version_cache_stale() -> bool {
     true
 }
 
+async fn fetch_latest_release_tag(client: &reqwest::Client) -> Option<String> {
+    let latest_url = format!("{}/releases/latest", api_root());
+    let res = client
+        .get(&latest_url)
+        .header("User-Agent", format!("svgfetch/{}", crate::VERSION))
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+        .ok()?;
+    let rel: Release = res.json().await.ok()?;
+    Some(rel.tag_name.trim_start_matches('v').to_string())
+}
+
+async fn is_github_action_in_progress(client: &reqwest::Client) -> bool {
+    let url = "https://api.github.com/repos/avdeshjadon/svgfetch/actions/runs?per_page=5";
+    if let Ok(res) = client
+        .get(url)
+        .header("User-Agent", format!("svgfetch/{}", crate::VERSION))
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+    {
+        if let Ok(json) = res.json::<serde_json::Value>().await {
+            if let Some(runs) = json.get("workflow_runs").and_then(|v| v.as_array()) {
+                for run in runs {
+                    let branch = run.get("head_branch").and_then(|b| b.as_str()).unwrap_or("");
+                    let status = run.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                    if branch == "main" && (status == "in_progress" || status == "queued") {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+pub async fn run_background_version_check() {
+    if !is_version_cache_stale() {
+        return;
+    }
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .user_agent(format!("svgfetch/{} (check)", crate::VERSION))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let main_ver = fetch_upstream_main_version(&client).await;
+    let rel_ver = fetch_latest_release_tag(&client).await;
+
+    let candidate = match (main_ver, rel_ver) {
+        (Some(m), Some(r)) => {
+            if version_cmp(&m, &r) == std::cmp::Ordering::Greater {
+                Some(m)
+            } else {
+                Some(r)
+            }
+        }
+        (Some(m), None) => Some(m),
+        (None, Some(r)) => Some(r),
+        (None, None) => None,
+    };
+
+    if let Some(v) = candidate {
+        save_cached_latest_version(&v);
+    }
+}
+
 pub fn spawn_background_version_check() {
     if !is_version_cache_stale() {
         return;
     }
     tokio::spawn(async {
-        let client = match reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(3))
-            .user_agent(format!("svgfetch/{} (check)", crate::VERSION))
-            .build()
-        {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-
-        if let Some(v) = fetch_upstream_main_version(&client).await {
-            save_cached_latest_version(&v);
-        }
+        run_background_version_check().await;
     });
 }
 
@@ -477,11 +537,13 @@ pub async fn run_update() -> Result<i32> {
                 None => true,
             };
 
-            if release_is_behind {
+            let action_in_progress = is_github_action_in_progress(&client).await;
+
+            if release_is_behind || action_in_progress {
                 println!();
-                println!("  [notice] Version v{} was recently pushed to main and is currently building on GitHub Actions.", main_ver);
-                println!("           The release binaries are still compiling for all platforms.");
-                println!("           Please wait an estimated 3 to 5 minutes, then run `svgfetch update` again.");
+                println!("  \x1b[1;33m[notice]\x1b[0m Version v{} is currently building on GitHub Actions.", main_ver);
+                println!("           Wait for some time, version is still in progress.");
+                println!("           Please wait an estimated 5 to 10 minutes to compile, then you can update.");
                 println!();
                 return Ok(0);
             }
@@ -490,9 +552,9 @@ pub async fn run_update() -> Result<i32> {
                 let has_platform_asset = rel.assets.iter().any(|a| a.name == primary_asset || a.name == legacy_asset);
                 if !has_platform_asset {
                     println!();
-                    println!("  [notice] Version v{} is currently building on GitHub Actions.", main_ver);
-                    println!("           The release binary for your platform ({triple}) is still compiling.");
-                    println!("           Please wait an estimated 3 to 5 minutes, then run `svgfetch update` again.");
+                    println!("  \x1b[1;33m[notice]\x1b[0m Version v{} is currently building on GitHub Actions.", main_ver);
+                    println!("           Wait for some time, version is still in progress (platform assets compiling).");
+                    println!("           Please wait an estimated 5 to 10 minutes to compile, then you can update.");
                     println!();
                     return Ok(0);
                 }
@@ -571,7 +633,7 @@ pub async fn run_update() -> Result<i32> {
     let fresh = find_binaries(&extract_dir)?;
     let ext_bin = if cfg!(windows) { ".exe" } else { "" };
     let mut installed = Vec::new();
-    for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
+    for name in ["svg", "svgfetch", "svg-fetch", "get-svg", "getsvg"] {
         let target = bin_dir.join(format!("{name}{ext_bin}"));
         if let Some(source) = fresh.iter().find(|p| {
             p.file_name().map(|n| n.to_string_lossy().into_owned())
@@ -585,12 +647,21 @@ pub async fn run_update() -> Result<i32> {
                     .to_string_lossy()
                     .into_owned(),
             );
+        } else if name == "svg" && bin_dir.join(format!("svgfetch{ext_bin}")).exists() {
+            let main_bin = bin_dir.join(format!("svgfetch{ext_bin}"));
+            let _ = std::fs::copy(&main_bin, &target);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755));
+            }
+            installed.push(name.to_string());
         }
     }
 
     println!("  ✓ [installed]  Binaries updated successfully ({})", installed.join(", "));
 
-    for name in ["svgfetch", "svg-fetch", "get-svg", "getsvg"] {
+    for name in ["svg", "svgfetch", "svg-fetch", "get-svg", "getsvg"] {
         let stale = bin_dir.join(format!("{name}{ext_bin}.old"));
         if stale.exists() {
             let _ = std::fs::remove_file(&stale);
