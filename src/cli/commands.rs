@@ -145,7 +145,20 @@ pub async fn dispatch(cli: Cli) -> Result<i32> {
                 message,
                 category,
                 dry_run,
-            } => cmd_suggest(&brand, message.as_deref(), category.as_deref(), dry_run).await,
+            } => {
+                let effective_variant = cli.variant.map(|v| match v {
+                    crate::models::AssetVariant::Icon => "icon",
+                    _ => "logo",
+                });
+                cmd_suggest(
+                    &brand,
+                    message.as_deref(),
+                    category.as_deref(),
+                    effective_variant,
+                    dry_run,
+                )
+                .await
+            }
         }
     } else if !cli.brand.is_empty() {
         let query = cli.brand.join(" ");
@@ -650,6 +663,7 @@ async fn cmd_suggest(
     brand: &str,
     message: Option<&str>,
     category_override: Option<&str>,
+    variant: Option<&str>,
     dry_run: bool,
 ) -> Result<i32> {
     let brand = brand.trim();
@@ -689,6 +703,9 @@ async fn cmd_suggest(
         eprintln!("  event_type  : curate-brand");
         eprintln!("  brand       : {}", brand);
         eprintln!("  category    : {}", category);
+        if let Some(v) = variant {
+            eprintln!("  variant     : {}", v);
+        }
         if let Some(msg) = message {
             eprintln!("  message     : {}", msg);
         }
@@ -698,7 +715,7 @@ async fn cmd_suggest(
         return Ok(0);
     }
 
-    let result = crate::curated::trigger_remote_curation(brand, category).await;
+    let result = crate::curated::trigger_remote_curation(brand, category, variant, message).await;
     crate::curated::report_remote_curation(brand, &result);
 
     match result {

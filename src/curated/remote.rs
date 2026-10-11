@@ -30,7 +30,12 @@ pub enum RemoteCurationResult {
 ///
 /// This is a best-effort, non-blocking helper. Callers should print a friendly
 /// hint to the user regardless of the return value.
-pub async fn trigger_remote_curation(brand_name: &str, category: &str) -> RemoteCurationResult {
+pub async fn trigger_remote_curation(
+    brand_name: &str,
+    category: &str,
+    variant: Option<&str>,
+    message: Option<&str>,
+) -> RemoteCurationResult {
     let token = match std::env::var("SVGFETCH_GITHUB_TOKEN") {
         Ok(t) if !t.is_empty() => t,
         _ => return RemoteCurationResult::NoToken,
@@ -38,13 +43,20 @@ pub async fn trigger_remote_curation(brand_name: &str, category: &str) -> Remote
 
     let url = format!("https://api.github.com/repos/{}/dispatches", ICONS_REPO);
 
+    let mut client_payload = serde_json::Map::new();
+    client_payload.insert("brand".to_string(), json!(brand_name));
+    client_payload.insert("category".to_string(), json!(category));
+    client_payload.insert("requester".to_string(), json!("svgfetch-cli"));
+    if let Some(v) = variant {
+        client_payload.insert("variant".to_string(), json!(v));
+    }
+    if let Some(m) = message {
+        client_payload.insert("message".to_string(), json!(m));
+    }
+
     let body = json!({
         "event_type": DISPATCH_EVENT,
-        "client_payload": {
-            "brand": brand_name,
-            "category": category,
-            "requester": "svgfetch-cli"
-        }
+        "client_payload": client_payload
     });
 
     let client = match reqwest::Client::builder()

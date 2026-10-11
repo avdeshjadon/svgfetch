@@ -488,4 +488,41 @@ mod tests {
         let err = parsed.unwrap_err().to_string();
         assert!(err.contains("invalid value 'banana' for '--variant"));
     }
+
+    #[test]
+    fn parses_suggest_command_and_alias() {
+        let cli = Cli::parse_from([
+            "svgfetch",
+            "suggest",
+            "Linear",
+            "-m",
+            "Design system",
+            "-c",
+            "devops",
+            "--dry-run",
+        ]);
+        match cli.command {
+            Some(Command::Suggest {
+                brand,
+                message,
+                category,
+                dry_run,
+            }) => {
+                assert_eq!(brand, "Linear");
+                assert_eq!(message.as_deref(), Some("Design system"));
+                assert_eq!(category.as_deref(), Some("devops"));
+                assert!(dry_run);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        // Test alias "request"
+        let cli_alias = Cli::parse_from(["svgfetch", "request", "Notion"]);
+        match cli_alias.command {
+            Some(Command::Suggest { brand, .. }) => {
+                assert_eq!(brand, "Notion");
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
 }
