@@ -229,13 +229,18 @@ pub async fn auto_contribute_brand(
         .current_dir(&repo_dir)
         .output();
 
-    // Push to origin main to ensure remote manifest and assets are immediately live
+    // Push to origin main to ensure remote manifest and assets are immediately live.
+    // Capture git's output so it cannot interleave with the spinner frame; a
+    // network push is rarely instant, so the animation is meaningful here.
+    let ui = crate::cli::ui::Ui::detect();
+    let spinner = ui.spinner("[sync] Pushing to svgfetch-icons\u{2026}");
     let push_success = Command::new("git")
         .args(["push", "origin", "main"])
         .current_dir(&repo_dir)
-        .status()
-        .map(|s| s.success())
+        .output()
+        .map(|o| o.status.success())
         .unwrap_or(false);
+    crate::cli::ui::stop(spinner);
 
     if push_success {
         eprintln!("[sync] Manifest updated and pushed to svgfetch-icons repository.");

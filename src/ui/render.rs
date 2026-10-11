@@ -28,15 +28,45 @@ const LOGO: [&str; 14] = [
     "             ▀▀ ▀",
 ];
 
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/// Thinking glyphs, kept in sync with `GLYPHS` in `src/cli/ui.rs` so the CLI
+/// and the interactive UI pulse the same mark (ping-pong order).
+const SPINNER: [&str; 10] = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
 
 /// Spinner glyph for the current frame (static "/" when animations are off).
 fn spinner(t: &super::theme::Theme, frame: u64) -> &'static str {
     if t.animations {
-        SPINNER[(frame / 6) as usize % SPINNER.len()]
+        SPINNER[(frame / 3) as usize % SPINNER.len()]
     } else {
         "/"
     }
+}
+
+/// Ten-cell block scanner sweeping back and forth, matching the CLI thinking
+/// line: a bright accent head with a fading two-cell tail.
+fn scanner_spans(t: &super::theme::Theme, frame: u64) -> Vec<Span<'static>> {
+    const CELLS: usize = 10;
+    let period = 2 * (CELLS - 1);
+    let p = (frame / 2) as usize % period;
+    let (pos, dir) = if p < CELLS {
+        (p as isize, 1isize)
+    } else {
+        ((period - p) as isize, -1isize)
+    };
+    let mut spans = Vec::with_capacity(CELLS);
+    for i in 0..CELLS {
+        let i = i as isize;
+        let (cell, style) = if i == pos {
+            ("■", t.bold_accent())
+        } else if i == pos - dir {
+            ("▪", Style::default().fg(Color::Indexed(173)))
+        } else if i == pos - 2 * dir {
+            ("▪", Style::default().fg(Color::Indexed(130)))
+        } else {
+            ("▪", Style::default().fg(Color::Indexed(238)))
+        };
+        spans.push(Span::styled(cell, style));
+    }
+    spans
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -330,12 +360,16 @@ fn cursor_x(input: &str) -> u16 {
 fn draw_searching(f: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;
     let s = spinner(t, app.frame);
+    let mut searching = vec![
+        Span::styled(s, t.accent_style()),
+        Span::styled("  Searching Wikimedia Commons…", t.text_style()),
+    ];
+    if t.animations {
+        searching.push(Span::raw("  "));
+        searching.extend(scanner_spans(t, app.frame));
+    }
     let text = Text::from(vec![
-        Line::from(vec![
-            Span::styled(s, t.accent_style()),
-            Span::raw("  Searching Wikimedia Commons…"),
-        ])
-        .alignment(Alignment::Center),
+        Line::from(searching).alignment(Alignment::Center),
         Line::from(Span::styled(
             format!("\"{}\"", app.search_query),
             t.dim_style(),
