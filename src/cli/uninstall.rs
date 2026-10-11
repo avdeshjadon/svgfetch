@@ -8,7 +8,9 @@
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
+use crate::cli::ui::{self, LogLine, Tally, Ui};
 use crate::config::Settings;
 use crate::error::{Error, Result};
 
@@ -120,34 +122,41 @@ fn collect_plan_with_exe(settings: &Settings, exe: Option<&Path>) -> UninstallPl
 
 /// Run the full uninstall. Returns a process exit code.
 pub fn run_uninstall(yes: bool) -> Result<i32> {
+    let ui = Ui::detect();
     let settings = Settings::load().unwrap_or_else(|_| Settings::default());
-    let plan = collect_plan(&settings);
+    let plan = ui.think("Scanning system for svgfetch files\u{2026}", || {
+        collect_plan(&settings)
+    });
 
     if plan.targets().is_empty() {
-        println!("Nothing to remove — svgfetch already leaves no trace on this system.");
+        ui.print_box(&[
+            "svgfetch uninstall".to_string(),
+            String::new(),
+            "Nothing to remove \u{2014} svgfetch already leaves no trace on this system."
+                .to_string(),
+        ]);
         return Ok(0);
     }
 
-    println!("  ┌─────────────────────────────────────────────────────────────┐");
-    println!("  │  svgfetch uninstall  ·  Purge tool, caches & binaries       │");
-    println!("  └─────────────────────────────────────────────────────────────┘");
+    ui.print_box(&["svgfetch uninstall  \u{00b7}  Purge tool, caches & binaries".to_string()]);
     println!();
     println!("  Targets identified for removal:");
     if let Some(p) = &plan.config_dir {
-        print_target("config   ", p, "Settings, cache, and search index");
+        print_target("config", p, "Settings, cache, and search index");
     }
     if let Some(p) = &plan.download_dir {
         print_target("downloads", p, "SVGs downloaded by svgfetch");
     }
     for b in &plan.binaries {
-        print_target("binary   ", b, "Executable binary");
+        print_target("binary", b, "Executable binary");
     }
     if plan.download_dir.is_none() && settings.download_dir.exists() {
         println!();
         println!(
-            "  [note] Custom download directory left untouched (not named \"svgfetch\"):\n         {}",
-            settings.download_dir.display()
+            "  {} Custom download directory left untouched (not named \"svgfetch\"):",
+            ui::yellow("!", ui.color)
         );
+        println!("         {}", ui::tilde(&settings.download_dir));
         println!("         Delete it manually if you also want those files removed.");
     }
     println!();
@@ -164,50 +173,62 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line)?;
         if !matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            println!("  [cancelled] Uninstall cancelled.");
+            println!(
+                "  {} Uninstall cancelled.",
+                ui::yellow("[cancelled]", ui.color)
+            );
             return Ok(0);
         }
     }
     println!();
 
-    // 1. Purge config & persistent caches with animated thinking ticker
-    animate_spinner("Purging configuration and persistent caches...", || {
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        remove_dir_report(&plan.config_dir, "Configuration & cache");
+    let mut tally = Tally::default();
+
+    // 1. Purge config & persistent caches
+    let lines = ui.step("Configuration & caches", 1, 4, || {
+        std::thread::sleep(Duration::from_millis(150));
+        remove_dir_report(&plan.config_dir, "Configuration & cache")
     });
+    tally.add(&lines);
 
     // 2. Purge downloads
-    animate_spinner("Purging downloaded SVG asset cache...", || {
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        remove_dir_report(&plan.download_dir, "Downloaded assets");
+    let lines = ui.step("Downloaded assets", 2, 4, || {
+        std::thread::sleep(Duration::from_millis(150));
+        remove_dir_report(&plan.download_dir, "Downloaded assets")
     });
+    tally.add(&lines);
 
     // 3. Unregister npm global package
-    animate_spinner("Unregistering global npm packages...", || {
-        std::thread::sleep(std::time::Duration::from_millis(120));
+    let lines = ui.step("Global npm package", 3, 4, || {
+        std::thread::sleep(Duration::from_millis(120));
         if let Ok(output) = std::process::Command::new("npm")
             .args(["uninstall", "-g", "svgfetch", "@avdeshjadon/get-svg"])
             .output()
         {
             if output.status.success() {
-                println!("  ✓ [unlinked]  Global npm package unregistered");
+                return vec![LogLine::ok("unlinked", "Global npm package unregistered")];
             }
         }
+        Vec::new()
     });
+    tally.add(&lines);
 
     // 4. Unlink binaries
-    animate_spinner("Unlinking executable binaries and symlinks...", || {
-        std::thread::sleep(std::time::Duration::from_millis(150));
+    let lines = ui.step("Executable binaries", 4, 4, || {
+        std::thread::sleep(Duration::from_millis(150));
+        let mut out = Vec::new();
         if let Ok(cur) = std::env::current_exe() {
             for bin in &plan.binaries {
                 if bin == &cur {
-                    remove_running_binary(bin);
+                    if let Some(line) = remove_running_binary(bin) {
+                        out.push(line);
+                    }
                 } else {
                     let removed = std::fs::remove_file(bin).is_ok();
                     if removed {
-                        println!("  ✓ [unlinked]  {}", bin.display());
+                        out.push(unlinked(bin));
                     } else {
-                        println!("  – [skipped]   {}", bin.display());
+                        out.push(LogLine::skipped(ui::tilde(bin)));
                     }
                 }
             }
@@ -215,84 +236,76 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
             for bin in &plan.binaries {
                 let removed = std::fs::remove_file(bin).is_ok();
                 if removed {
-                    println!("  ✓ [unlinked]  {}", bin.display());
+                    out.push(unlinked(bin));
                 } else {
-                    println!("  – [skipped]   {}", bin.display());
+                    out.push(LogLine::skipped(ui::tilde(bin)));
                 }
             }
         }
+        out
     });
+    tally.add(&lines);
 
     println!();
-    println!("  ┌─────────────────────────────────────────────────────────────┐");
-    println!("  │  svgfetch has been completely removed from this system.     │");
-    println!("  │                                                             │");
-    println!("  │  Thank you for using svgfetch! Until next time!             │");
-    println!("  │                                                             │");
-    println!("  │  Reinstall anytime with:                                    │");
-    println!("  │    npm install -g svgfetch                                  │");
-    println!("  │    curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh │");
-    println!("  └─────────────────────────────────────────────────────────────┘");
+    ui.print_summary(&tally);
+
+    let headline = if tally.warnings > 0 {
+        format!(
+            "svgfetch was removed, but {} warning(s) need review.",
+            tally.warnings
+        )
+    } else {
+        "svgfetch has been completely removed from this system.".to_string()
+    };
+    ui.print_box(&[
+        headline,
+        String::new(),
+        "Thank you for using svgfetch! Until next time!".to_string(),
+        String::new(),
+        "Reinstall anytime with:".to_string(),
+        "  npm install -g svgfetch".to_string(),
+        "  curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
+            .to_string(),
+    ]);
     println!();
     Ok(0)
 }
 
-fn animate_spinner<F, R>(msg: &str, f: F) -> R
-where
-    F: FnOnce() -> R,
-{
-    let is_tty = std::io::stderr().is_terminal();
-    if !is_tty {
-        return f();
-    }
-
-    let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    let (tx, rx) = std::sync::mpsc::channel();
-    let msg_owned = msg.to_string();
-
-    let handle = std::thread::spawn(move || {
-        let mut i = 0;
-        while rx.try_recv().is_err() {
-            let frame = frames[i % frames.len()];
-            eprint!("\r  {} [cleaning] {} ", frame, msg_owned);
-            let _ = std::io::stderr().flush();
-            std::thread::sleep(std::time::Duration::from_millis(60));
-            i += 1;
-        }
-    });
-
-    let res = f();
-    let _ = tx.send(());
-    let _ = handle.join();
-    eprint!("\r\x1b[2K");
-    let _ = std::io::stderr().flush();
-    res
+fn unlinked(path: &Path) -> LogLine {
+    LogLine::ok("unlinked", ui::tilde(path))
 }
 
 fn print_target(label: &str, path: &Path, what: &str) {
-    println!("  • {:<10} {:<38} \u{2013} {what}", label, path.display());
+    println!(
+        "  \u{2022} {:<10} {} \u{2013} {what}",
+        label,
+        ui::tilde(path)
+    );
 }
 
-fn remove_dir_report(dir: &Option<PathBuf>, label: &str) {
+fn remove_dir_report(dir: &Option<PathBuf>, label: &str) -> Vec<LogLine> {
     match dir {
-        None => println!("  – [skipped]   {label} already removed"),
-        Some(p) => {
-            let res = std::fs::remove_dir_all(p);
-            match res {
-                Ok(()) => println!("  ✓ [deleted]   {label} removed  ({})", p.display()),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    println!("  – [skipped]   {label} already removed")
-                }
-                Err(e) => println!("  ! [notice]    Could not remove {label} ({}): {e}", p.display()),
+        None => vec![LogLine::skipped(format!("{label} already removed"))],
+        Some(p) => match std::fs::remove_dir_all(p) {
+            Ok(()) => vec![LogLine::ok(
+                "deleted",
+                format!("{label} removed  ({})", ui::tilde(p)),
+            )],
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                vec![LogLine::skipped(format!("{label} already removed"))]
             }
-        }
+            Err(e) => vec![LogLine::notice(format!(
+                "Could not remove {label} ({}): {e}",
+                ui::tilde(p)
+            ))],
+        },
     }
 }
 
 /// The running binary cannot be deleted while executing on Windows, so we
 /// schedule a detached, delayed delete there. On Unix unlinking the file is
 /// safe — the inode lives until this process exits.
-fn remove_running_binary(path: &Path) {
+fn remove_running_binary(path: &Path) -> Option<LogLine> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -307,19 +320,16 @@ fn remove_running_binary(path: &Path) {
                 .spawn()
                 .map(|_| ())
         });
+        None
     }
     #[cfg(not(windows))]
     {
         let removed = std::fs::remove_file(path).is_ok();
-        println!(
-            "{} {}",
-            if removed {
-                "\u{2713} removed"
-            } else {
-                "\u{2013} note"
-            },
-            path.display()
-        );
+        Some(if removed {
+            LogLine::ok("unlinked", ui::tilde(path))
+        } else {
+            LogLine::notice(format!("{} (running binary)", ui::tilde(path)))
+        })
     }
 }
 

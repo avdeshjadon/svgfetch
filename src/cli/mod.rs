@@ -4,6 +4,7 @@ pub mod args;
 pub mod commands;
 pub mod doctor;
 pub mod output;
+pub mod ui;
 pub mod uninstall;
 pub mod update;
 

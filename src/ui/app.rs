@@ -62,7 +62,6 @@ pub enum AppEvent {
         url: String,
         fallback: Option<String>,
         raw_bytes: Option<Vec<u8>>,
-        lines: Vec<ratatui::text::Line<'static>>,
     },
     PreviewFailed {
         url: String,
@@ -130,7 +129,6 @@ pub struct App {
     pub error: Option<ErrorState>,
     pub status: String,
 
-    pub preview_cache: std::collections::HashMap<String, Vec<ratatui::text::Line<'static>>>,
     pub preview_bytes_cache: std::collections::HashMap<String, Vec<u8>>,
     pub preview_loading: std::collections::HashSet<String>,
 
@@ -181,7 +179,6 @@ impl App {
                 crate::VERSION,
                 crate::TAGLINE
             ),
-            preview_cache: std::collections::HashMap::new(),
             preview_bytes_cache: std::collections::HashMap::new(),
             preview_loading: std::collections::HashSet::new(),
             pending_search_query: String::new(),
@@ -700,7 +697,7 @@ impl App {
         let Some(url) = direct_url.as_ref().or(thumb_url.as_ref()).cloned() else {
             return;
         };
-        if self.preview_cache.contains_key(&url) || self.preview_loading.contains(&url) {
+        if self.preview_bytes_cache.contains_key(&url) || self.preview_loading.contains(&url) {
             return;
         }
 
@@ -761,15 +758,12 @@ impl App {
             }
 
             if let Some(bytes) = fetched_bytes {
-                if let Some(lines) = crate::ui::preview::render_halfblocks(&bytes, 42, 13) {
-                    let _ = tx.send(AppEvent::PreviewReady {
-                        url: url.clone(),
-                        fallback,
-                        raw_bytes: Some(bytes),
-                        lines,
-                    });
-                    return;
-                }
+                let _ = tx.send(AppEvent::PreviewReady {
+                    url: url.clone(),
+                    fallback,
+                    raw_bytes: Some(bytes),
+                });
+                return;
             }
             let _ = tx.send(AppEvent::PreviewFailed { url });
         });
@@ -822,7 +816,6 @@ impl App {
                             url: url.clone(),
                             fallback: None,
                             raw_bytes: Some(b.to_vec()),
-                            lines: Vec::new(),
                         });
                     }
                 }
@@ -980,7 +973,6 @@ impl App {
                 url,
                 fallback,
                 raw_bytes,
-                lines,
             } => {
                 self.preview_loading.remove(&url);
                 if let Some(bytes) = raw_bytes {
@@ -991,9 +983,7 @@ impl App {
                 }
                 if let Some(fb) = &fallback {
                     self.preview_loading.remove(fb);
-                    self.preview_cache.insert(fb.clone(), lines.clone());
                 }
-                self.preview_cache.insert(url, lines);
             }
             AppEvent::PreviewFailed { url } => {
                 self.preview_loading.remove(&url);

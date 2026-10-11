@@ -7,12 +7,13 @@
 
 use std::io::{Read, Write as _};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use flate2::read::GzDecoder;
-use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::cli::ui::{self, LogLine, Progress, Ui, MIN_STEP};
 use crate::error::{Error, Result};
 use crate::models::format_size;
 
@@ -105,7 +106,13 @@ fn url_allowed(s: &str) -> bool {
 
 /// Download `url` to `path`, showing a live progress bar. Content-type checks
 /// mirror the SVG downloader so an HTML error page is never saved.
-async fn download(client: &reqwest::Client, url: &str, path: &Path, label: &str) -> Result<u64> {
+async fn download(
+    client: &reqwest::Client,
+    url: &str,
+    path: &Path,
+    label: &str,
+    ui: &Ui,
+) -> Result<u64> {
     if !url_allowed(url) {
         return Err(Error::InvalidUrl(url.to_string()));
     }
@@ -129,15 +136,7 @@ async fn download(client: &reqwest::Client, url: &str, path: &Path, label: &str)
     }
 
     let total = response.content_length().unwrap_or(0);
-    let bar = ProgressBar::new(total);
-    bar.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} {msg}\n[{bar:40.green/blue}] {bytes}/{total_bytes} {bytes_per_sec} ETA {eta}",
-        )
-        .unwrap()
-        .progress_chars("=>─"),
-    );
-    bar.set_message(label.to_string());
+    let mut progress = Progress::new(ui, label, total);
 
     let mut file = std::fs::File::create(path)?;
     let mut remaining = total;
@@ -149,12 +148,12 @@ async fn download(client: &reqwest::Client, url: &str, path: &Path, label: &str)
         file.write_all(&chunk)?;
         written += chunk.len() as u64;
         remaining = remaining.saturating_sub(chunk.len() as u64);
-        bar.set_position(written);
+        progress.update(written);
         if remaining == 0 {
             break;
         }
     }
-    bar.finish_and_clear();
+    progress.finish();
     Ok(written)
 }
 
@@ -352,13 +351,17 @@ pub fn check_and_print_update_notice() {
     let current = crate::VERSION;
     if let Some(latest) = get_cached_latest_version() {
         if version_cmp(current, &latest) == std::cmp::Ordering::Less {
+            let ui = Ui::detect();
+            let tag = ui::yellow("[notice]", ui.color);
             eprintln!();
             eprintln!(
-                "  \x1b[1;33m[notice]\x1b[0m A new release of svgfetch is available: \x1b[31mv{}\x1b[0m -> \x1b[32mv{}\x1b[0m",
-                current, latest
+                "  {tag} A new release of svgfetch is available: {} -> {}",
+                ui::red(&format!("v{current}"), ui.color),
+                ui::green(&format!("v{latest}"), ui.color)
             );
             eprintln!(
-                "  \x1b[1;33m[notice]\x1b[0m To update, run: \x1b[1;36msvgfetch update\x1b[0m"
+                "  {tag} To update, run: {}",
+                ui::accent("svgfetch update", ui.color)
             );
             eprintln!();
         }
@@ -408,7 +411,10 @@ async fn is_github_action_in_progress(client: &reqwest::Client) -> bool {
         if let Ok(json) = res.json::<serde_json::Value>().await {
             if let Some(runs) = json.get("workflow_runs").and_then(|v| v.as_array()) {
                 for run in runs {
-                    let branch = run.get("head_branch").and_then(|b| b.as_str()).unwrap_or("");
+                    let branch = run
+                        .get("head_branch")
+                        .and_then(|b| b.as_str())
+                        .unwrap_or("");
                     let status = run.get("status").and_then(|s| s.as_str()).unwrap_or("");
                     if branch == "main" && (status == "in_progress" || status == "queued") {
                         return true;
@@ -491,6 +497,7 @@ async fn fetch_upstream_main_version(client: &reqwest::Client) -> Option<String>
 
 /// Run the self-update flow. Returns a process exit code.
 pub async fn run_update() -> Result<i32> {
+    let ui = Ui::detect();
     let current = crate::VERSION;
     let exe = std::env::current_exe().map_err(|_| {
         Error::Other(
@@ -511,21 +518,19 @@ pub async fn run_update() -> Result<i32> {
         .user_agent(format!("svgfetch/{current} (self-update)"))
         .build()?;
 
-    // 1. Check upstream main branch version in Cargo.toml
+    // --- Step 1/4: check upstream main + latest release -------------------
+    let spinner = ui.spinner("Checking latest version\u{2026}");
     let raw_main_version = fetch_upstream_main_version(&client).await;
-
-    // 2. Fetch latest release from GitHub API
     let latest_url = format!("{}/releases/latest", api_root());
     let release_res = client.get(&latest_url).send().await;
-
     let release: Option<Release> = match release_res {
         Ok(r) if r.status().is_success() => r.json().await.ok(),
         _ => None,
     };
-
     let latest = release
         .as_ref()
         .map(|r| r.tag_name.trim_start_matches('v').to_string());
+    let check_elapsed = spinner.map(|s| s.finish_min(MIN_STEP)).unwrap_or_default();
 
     // Scenario 1: Upstream main has a newer version than current
     if let Some(ref main_ver) = raw_main_version {
@@ -540,22 +545,46 @@ pub async fn run_update() -> Result<i32> {
             let action_in_progress = is_github_action_in_progress(&client).await;
 
             if release_is_behind || action_in_progress {
-                println!();
-                println!("  \x1b[1;33m[notice]\x1b[0m Version v{} is currently building on GitHub Actions.", main_ver);
-                println!("           Wait for some time, version is still in progress.");
-                println!("           Please wait an estimated 5 to 10 minutes to compile, then you can update.");
-                println!();
+                ui.render_step(
+                    "Checking latest version",
+                    1,
+                    4,
+                    check_elapsed,
+                    &[LogLine::notice(format!(
+                        "v{main_ver} is building on GitHub Actions"
+                    ))],
+                );
+                ui.notice(&[
+                    format!("Version v{main_ver} is currently building on GitHub Actions."),
+                    "Wait for some time, version is still in progress.".to_string(),
+                    "Please wait an estimated 5 to 10 minutes to compile, then you can update."
+                        .to_string(),
+                ]);
                 return Ok(0);
             }
 
             if let Some(ref rel) = release {
-                let has_platform_asset = rel.assets.iter().any(|a| a.name == primary_asset || a.name == legacy_asset);
+                let has_platform_asset = rel
+                    .assets
+                    .iter()
+                    .any(|a| a.name == primary_asset || a.name == legacy_asset);
                 if !has_platform_asset {
-                    println!();
-                    println!("  \x1b[1;33m[notice]\x1b[0m Version v{} is currently building on GitHub Actions.", main_ver);
-                    println!("           Wait for some time, version is still in progress (platform assets compiling).");
-                    println!("           Please wait an estimated 5 to 10 minutes to compile, then you can update.");
-                    println!();
+                    ui.render_step(
+                        "Checking latest version",
+                        1,
+                        4,
+                        check_elapsed,
+                        &[LogLine::notice(format!(
+                            "v{main_ver} platform assets still compiling"
+                        ))],
+                    );
+                    ui.notice(&[
+                        format!("Version v{main_ver} is currently building on GitHub Actions."),
+                        "Wait for some time, version is still in progress (platform assets compiling)."
+                            .to_string(),
+                        "Please wait an estimated 5 to 10 minutes to compile, then you can update."
+                            .to_string(),
+                    ]);
                     return Ok(0);
                 }
             }
@@ -566,15 +595,43 @@ pub async fn run_update() -> Result<i32> {
     let latest_ver_str = match &latest {
         Some(l) => l.clone(),
         None => {
-            println!("  ✓ svgfetch v{current} is already up to date.");
+            ui.render_step(
+                "Checking latest version",
+                1,
+                4,
+                check_elapsed,
+                &[LogLine::skipped("No published releases found")],
+            );
+            ui.up_to_date(current);
             return Ok(0);
         }
     };
 
     if version_cmp(current, &latest_ver_str) != std::cmp::Ordering::Less {
-        println!("  ✓ svgfetch v{current} is already up to date.");
+        ui.render_step(
+            "Checking latest version",
+            1,
+            4,
+            check_elapsed,
+            &[LogLine::ok(
+                "checked",
+                format!("v{current} is the latest release"),
+            )],
+        );
+        ui.up_to_date(current);
         return Ok(0);
     }
+
+    ui.render_step(
+        "Checking latest version",
+        1,
+        4,
+        check_elapsed,
+        &[LogLine::ok(
+            "checked",
+            format!("v{current} \u{2192} v{latest_ver_str}"),
+        )],
+    );
 
     let release = release.unwrap();
     let asset = release
@@ -602,30 +659,60 @@ pub async fn run_update() -> Result<i32> {
         })?;
 
     println!(
-        "  [updating] Updating svgfetch v{} -> v{} (installed in {})",
-        current, latest_ver_str, bin_dir.display()
+        "  {} Updating svgfetch v{current} \u{2192} v{latest_ver_str} (installed in {})",
+        ui::dim("\u{00b7}", ui.color),
+        ui::tilde(&bin_dir)
     );
 
     let tmp = tempfile::tempdir()?;
     let archive_path = tmp.path().join(&asset_name);
+
+    // --- Step 2/4: download archive ---------------------------------------
     let expected = fetch_checksum(&client, &checksum_asset.browser_download_url).await?;
+    let download_label = format!("svgfetch v{current} \u{2192} v{latest_ver_str}");
+    let download_start = Instant::now();
     let bytes = download(
         &client,
         &asset.browser_download_url,
         &archive_path,
-        &asset_name,
+        &download_label,
+        &ui,
     )
     .await?;
-    println!("  ✓ [downloaded] Archive received ({}, {})", format_size(bytes), asset_name);
+    ui.render_step(
+        "Downloading release",
+        2,
+        4,
+        download_start.elapsed(),
+        &[LogLine::ok(
+            "downloaded",
+            format!("Archive received ({}, {asset_name})", format_size(bytes)),
+        )],
+    );
 
-    let got = sha256_of(&archive_path)?;
+    // --- Step 3/4: verify checksum ----------------------------------------
+    let (digest, verify_elapsed) = {
+        let spinner = ui.spinner("Verifying SHA-256\u{2026}");
+        let digest = sha256_of(&archive_path);
+        let elapsed = spinner.map(|s| s.finish_min(MIN_STEP)).unwrap_or_default();
+        (digest, elapsed)
+    };
+    let got = digest?;
     if got != expected {
         return Err(Error::Other(format!(
             "checksum mismatch (expected {expected}, got {got}) — aborting without touching your install."
         )));
     }
-    println!("  ✓ [verified]   SHA-256 integrity verified");
+    ui.render_step(
+        "Verifying integrity",
+        3,
+        4,
+        verify_elapsed,
+        &[LogLine::ok("verified", "SHA-256 integrity verified")],
+    );
 
+    // --- Step 4/4: replace binaries ---------------------------------------
+    let spinner = ui.spinner("Replacing binary\u{2026}");
     let extract_dir = tmp.path().join("pkg");
     std::fs::create_dir_all(&extract_dir)?;
     extract(&archive_path, &extract_dir)?;
@@ -659,23 +746,32 @@ pub async fn run_update() -> Result<i32> {
         }
     }
 
-    println!("  ✓ [installed]  Binaries updated successfully ({})", installed.join(", "));
-
     for name in ["svg", "svgfetch", "svg-fetch", "get-svg", "getsvg"] {
         let stale = bin_dir.join(format!("{name}{ext_bin}.old"));
         if stale.exists() {
             let _ = std::fs::remove_file(&stale);
         }
     }
+    let install_elapsed = spinner.map(|s| s.finish_min(MIN_STEP)).unwrap_or_default();
 
     save_cached_latest_version(&latest_ver_str);
 
-    println!();
-    println!("  ┌─────────────────────────────────────────────────────────────┐");
-    println!("  │  Successfully updated svgfetch from v{} to v{}!           │", current, latest_ver_str);
-    println!("  │                                                             │");
-    println!("  │  Restart your terminal or run `svgfetch` to start using it. │");
-    println!("  └─────────────────────────────────────────────────────────────┘");
+    ui.render_step(
+        "Replacing binary",
+        4,
+        4,
+        install_elapsed,
+        &[LogLine::ok(
+            "installed",
+            format!("Binaries updated successfully ({})", installed.join(", ")),
+        )],
+    );
+
+    ui.print_box(&[
+        format!("Successfully updated svgfetch from v{current} to v{latest_ver_str}!"),
+        String::new(),
+        "Restart your terminal or run `svgfetch` to start using it.".to_string(),
+    ]);
     println!();
     Ok(0)
 }
