@@ -123,7 +123,7 @@ async fn prompt_interactive_selection(
 ) -> Option<String> {
     use crossterm::cursor::{MoveToColumn, MoveUp};
     use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-    use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+    use crossterm::terminal::{enable_raw_mode, Clear, ClearType};
 
     eprintln!(
         "[curated] Found \"{}\" with {} variants.",
@@ -224,36 +224,10 @@ async fn prompt_interactive_selection(
                             }
                         }
                         KeyCode::Char('v') | KeyCode::Char('V') => {
-                            // Temporarily leave raw mode to print ANSI graphic & launch retina window
-                            let _ = disable_raw_mode();
-                            let _ = crossterm::execute!(std::io::stderr(), crossterm::cursor::Show);
-
                             let opt = &options[selected];
-                            eprintln!(
-                                "\r\n[preview] Fetching vector preview for {} ({})...",
-                                brand_name, opt.leaf
-                            );
-
                             if let Some(bytes) = fetch_curated_bytes(&opt.filename).await {
-                                if let Some(ansi) =
-                                    crate::ui::preview::render_halfblocks_to_ansi(&bytes, 42, 12)
-                                {
-                                    eprint!("{}", ansi);
-                                }
                                 let _ = crate::ui::viewer::open_vector_window(&opt.leaf, &bytes);
-                                eprintln!(
-                                    "(Vector window launched. Use [↑/↓] to navigate, [Enter] to download)\r\n"
-                                );
-                            } else {
-                                eprintln!(
-                                    "[warn] Could not load preview bytes for {}.\r\n",
-                                    opt.leaf
-                                );
                             }
-
-                            let _ = enable_raw_mode();
-                            let _ = crossterm::execute!(std::io::stderr(), crossterm::cursor::Hide);
-                            let _ = draw_menu(selected);
                         }
                         KeyCode::Enter => {
                             drop(_guard);

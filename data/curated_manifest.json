@@ -10301,6 +10301,15 @@
     ]
   },
   {
+    "name": "Reliance",
+    "shortname": "reliance",
+    "category": "general",
+    "url": "",
+    "files": [
+      "general/reliance.svg"
+    ]
+  },
+  {
     "name": "Remix",
     "shortname": "remix",
     "category": "frameworks",
