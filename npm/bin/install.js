@@ -10,15 +10,25 @@ const pkg = require("../package.json");
 const VERSION = `v${pkg.version}`;
 const REPO = "avdeshjadon/svgfetch";
 
+const tty = require("tty");
+
 // --- presentation ---------------------------------------------------------
-// Cosmetic only: every message goes to stderr, and all colour/animation is
-// disabled when stderr is not a TTY, when NO_COLOR is set, or when TERM=dumb.
-// Rendering is wrapped so a broken pipe or a dumb terminal can never make the
-// postinstall fail.
+// Cosmetic only: every message goes to terminal TTY if available (bypassing npm pipe suppression),
+// and falls back to stderr. All colour/animation is disabled when not a TTY,
+// when NO_COLOR is set, or when TERM=dumb.
 const TICK_MS = 70;
 const MIN_STEP_MS = 450;
 
-const isTTY = !!process.stderr.isTTY;
+const ttyPath = process.platform === "win32" ? "\\\\.\\CONOUT$" : "/dev/tty";
+let termFd = null;
+try {
+  termFd = fs.openSync(ttyPath, "w");
+} catch (_) {}
+
+const isTTY =
+  termFd !== null
+    ? tty.isatty(termFd)
+    : (!!process.stderr.isTTY || !!process.stdout.isTTY);
 const NO_COLOR = Object.prototype.hasOwnProperty.call(process.env, "NO_COLOR");
 const TERM_DUMB = process.env.TERM === "dumb";
 const useColor = isTTY && !NO_COLOR && !TERM_DUMB;
@@ -35,6 +45,12 @@ const yellow = (t) => sgr("33", t);
 const dim = (t) => sgr("2", t);
 
 function write(str) {
+  if (termFd !== null) {
+    try {
+      fs.writeSync(termFd, str);
+      return;
+    } catch (_) {}
+  }
   try {
     process.stderr.write(str);
   } catch (_) {}
@@ -52,7 +68,15 @@ function showCursor() {
   write("\r\x1b[2K\x1b[?25h");
 }
 
-process.on("exit", showCursor);
+process.on("exit", () => {
+  showCursor();
+  if (termFd !== null) {
+    try {
+      fs.closeSync(termFd);
+      termFd = null;
+    } catch (_) {}
+  }
+});
 try {
   process.on("SIGINT", () => {
     showCursor();
@@ -290,8 +314,15 @@ async function install() {
   const binDir = path.join(__dirname);
   const binaryPath = path.join(binDir, info.binary);
 
-  if (fs.existsSync(binaryPath)) {
-    return binaryPath;
+  if (fs.existsSync(binaryPath) && !process.argv.includes("--force")) {
+    try {
+      const verOut = execSync(`"${binaryPath}" --version`, {
+        stdio: ["ignore", "pipe", "ignore"],
+      }).toString();
+      if (verOut.includes(pkg.version)) {
+        return binaryPath;
+      }
+    } catch (_) {}
   }
 
   box([
@@ -378,6 +409,14 @@ async function install() {
     if (!fs.existsSync(binaryPath) && fs.existsSync(legacyBinary)) {
       try { fs.copyFileSync(legacyBinary, binaryPath); } catch (_) {}
     }
+
+    try {
+      const junk = ["LICENSE", "README.md", "get-svg", "getsvg", "svg-fetch"];
+      for (const j of junk) {
+        const p = path.join(binDir, j);
+        if (p !== binaryPath && fs.existsSync(p)) fs.unlinkSync(p);
+      }
+    } catch (_) {}
 
     if (fs.existsSync(binaryPath)) {
       if (os.platform() !== "win32") {
