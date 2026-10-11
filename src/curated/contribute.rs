@@ -191,10 +191,18 @@ pub async fn auto_contribute_brand(
             }
             let _ = std::fs::write(&cache_path, &manifest_content);
 
-            // Update data/curated_manifest.json if repo root exists
+            // Update data/curated_manifest.json if svg-fetch repo exists
             let local_data_manifest = Path::new("data/curated_manifest.json");
             if local_data_manifest.exists() {
                 let _ = std::fs::copy(&manifest_source, local_data_manifest);
+            } else if let Some(parent) = repo_dir.parent() {
+                let sibling_data_manifest = parent
+                    .join("svg-fetch")
+                    .join("data")
+                    .join("curated_manifest.json");
+                if sibling_data_manifest.exists() {
+                    let _ = std::fs::copy(&manifest_source, sibling_data_manifest);
+                }
             }
         }
     }

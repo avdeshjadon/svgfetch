@@ -504,18 +504,17 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
             );
 
             // Auto-curate into svgfetch-icons if local repository is available
-            if let Ok(file_bytes) = std::fs::read(&target_file) {
-                let _ = crate::curated::auto_contribute_brand(
-                    &brand_name,
-                    &file_bytes,
-                    resolution.variant,
-                )
-                .await;
-            }
+            let contributed = if let Ok(file_bytes) = std::fs::read(&target_file) {
+                crate::curated::auto_contribute_brand(&brand_name, &file_bytes, resolution.variant)
+                    .await
+            } else {
+                false
+            };
 
-            if !resolution.is_curated {
+            if !resolution.is_curated && !contributed {
                 eprintln!(
-                    "[tip] Want to curate this brand mapping? Contribute to brands.json at https://github.com/avdeshjadon/svgfetch"
+                    "[tip] Request auto-curation into svgfetch-icons registry: svgfetch suggest \"{}\"",
+                    brand_name
                 );
             }
 
