@@ -46,7 +46,6 @@ toml = "0.8"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
 ratatui = "0.29"
-indicatif = "0.17"
 
 # --- files / archives ------------------------------------------------------
 zip = { version = "2", default-features = false, features = ["deflate"] }

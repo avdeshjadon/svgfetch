@@ -164,6 +164,18 @@ impl Ui {
         Spinner::start(self.animate, label)
     }
 
+    /// Show `text` while work runs: an animated "thinking" line on a TTY, or the
+    /// same one-line notice printed plainly otherwise. Pair with [`stop`].
+    pub fn announce(&self, text: &str) -> Option<Spinner> {
+        match self.spinner(text) {
+            Some(spinner) => Some(spinner),
+            None => {
+                eprintln!("{text}");
+                None
+            }
+        }
+    }
+
     /// Run `f` under a spinner without rendering a completed step. Used for the
     /// initial scan/search phases where only a single line of output follows.
     pub fn think<F, R>(&self, label: &str, f: F) -> R
@@ -252,6 +264,14 @@ impl Ui {
     /// Print a bordered panel whose width tracks the longest line.
     pub fn print_box(&self, lines: &[String]) {
         println!("{}", boxed(lines, self.color));
+    }
+}
+
+/// Stop an animation guard from [`Ui::spinner`]/[`Ui::announce`], holding the
+/// final frame briefly so it stays readable.
+pub fn stop(spinner: Option<Spinner>) {
+    if let Some(s) = spinner {
+        let _ = s.finish_min(MIN_STEP);
     }
 }
 

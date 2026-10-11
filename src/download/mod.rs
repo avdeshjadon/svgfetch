@@ -155,6 +155,13 @@ pub async fn download_many(ctx: Arc<BatchContext>, assets: Vec<Asset>) -> Result
                 );
             }
 
+            let progress: Option<file::ProgressFn> = ctx.events.as_ref().map(|tx| {
+                let tx = tx.clone();
+                let cb: file::ProgressFn = Box::new(move |done: u64, total: u64| {
+                    let _ = tx.send(BatchEvent::Progress { index, done, total });
+                });
+                cb
+            });
             let outcome = {
                 let mut guard = names.lock().await;
                 let preferred = guard.allocate(&ctx.dest, &asset.file_name, ctx.overwrite);
@@ -167,7 +174,7 @@ pub async fn download_many(ctx: Arc<BatchContext>, assets: Vec<Asset>) -> Result
                             asset.url.as_deref().unwrap(),
                             &path,
                             &ctx.cancel,
-                            None,
+                            progress,
                         )
                         .await
                     }

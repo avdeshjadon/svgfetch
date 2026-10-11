@@ -4,11 +4,10 @@ use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-
 use crate::api::{AssetProvider, WikimediaClient};
-use crate::archive::{create_zip, ZipEvent};
+use crate::archive::create_zip;
 use crate::cache::Cache;
+use crate::cli::ui::{self, Ui};
 use crate::cli::{CacheCommand, Cli, Command};
 use crate::config::Settings;
 use crate::download::{
@@ -301,7 +300,10 @@ async fn handle_curated_brand(
         .build()
         .map_err(|e| Error::Download(format!("HTTP client error: {}", e)))?;
 
-    eprintln!("[download] Fetching {} from CDN...", selected_file);
+    let spinner = Ui::detect().announce(&format!(
+        "[download] Fetching {} from CDN\u{2026}",
+        selected_file
+    ));
     let bytes = crate::curated::download_curated_file(
         &client,
         &selected_file,
@@ -309,6 +311,7 @@ async fn handle_curated_brand(
         args.overwrite,
     )
     .await?;
+    ui::stop(spinner);
 
     eprintln!(
         "[saved] {} ({})",
@@ -323,6 +326,7 @@ async fn handle_curated_brand(
 pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     let settings = Settings::load()?;
     let query_trim = args.query.trim();
+    let ui = Ui::detect();
 
     // 1. Priority 1: Check curated svgfetch-icons CDN library (in-memory or cached)
     if let Some(curated_entry) = crate::curated::find_curated_brand(query_trim) {
@@ -335,7 +339,10 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
         .build();
 
     if let Ok(client) = sync_client {
-        if crate::curated::sync_curated_catalog(&client).await.is_ok() {
+        let spinner = ui.spinner("[sync] Syncing svgfetch-icons catalog\u{2026}");
+        let synced = crate::curated::sync_curated_catalog(&client).await.is_ok();
+        ui::stop(spinner);
+        if synced {
             if let Some(curated_entry) = crate::curated::find_curated_brand(query_trim) {
                 eprintln!(
                     "[sync] Found \"{}\" after syncing with svgfetch-icons CDN.",
@@ -355,7 +362,8 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     let started = std::time::Instant::now();
 
     // 1. Resolve exact entity and variant
-    let resolution = match crate::resolution::resolve_entity_and_variant(
+    let spinner = ui.spinner("[info] Resolving brand and variant\u{2026}");
+    let resolution_result = crate::resolution::resolve_entity_and_variant(
         &provider,
         &cache,
         query_trim,
@@ -363,8 +371,9 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
         args.refresh,
         args.verbose,
     )
-    .await?
-    {
+    .await?;
+    ui::stop(spinner);
+    let resolution = match resolution_result {
         Some(res) => res,
         None => {
             eprintln!("{}", crate::resolution::unknown_query_message(query_trim));
@@ -498,6 +507,10 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
     })?;
 
     let cancel = tokio_util::sync::CancellationToken::new();
+    let spinner = ui.spinner(&format!(
+        "[download] Downloading {}\u{2026}",
+        asset.original_name
+    ));
     let outcome = crate::download::download_one_with_limit(
         &provider.client(),
         download_url,
@@ -507,6 +520,7 @@ pub async fn cmd_direct_brand(args: DirectBrandArgs) -> Result<i32> {
         None,
     )
     .await?;
+    ui::stop(spinner);
 
     match outcome {
         crate::download::DownloadOutcome::Written { bytes, sha256, .. } => {
@@ -567,6 +581,7 @@ pub async fn cmd_info(
     let settings = Settings::load()?;
     let provider = WikimediaClient::new(&settings)?;
     let cache = Cache::new(&settings);
+    let ui = Ui::detect();
 
     let asset_name_trim = asset_name.trim();
 
@@ -575,6 +590,7 @@ pub async fn cmd_info(
         || asset_name_trim.starts_with("file:")
         || asset_name_trim.ends_with(".svg");
 
+    let spinner = ui.spinner(&format!("Fetching metadata for {asset_name_trim}\u{2026}"));
     let (asset, resolution_info) = if is_direct_file {
         let title = if asset_name_trim.starts_with("File:") || asset_name_trim.starts_with("file:")
         {
@@ -621,6 +637,7 @@ pub async fn cmd_info(
             }
         }
     };
+    ui::stop(spinner);
 
     match format {
         OutputFormat::Json => {
@@ -742,7 +759,9 @@ async fn cmd_suggest(
         return Ok(0);
     }
 
+    let spinner = Ui::detect().spinner("[sync] Sending curation request\u{2026}");
     let result = crate::curated::trigger_remote_curation(brand, category, variant, message).await;
+    ui::stop(spinner);
     crate::curated::report_remote_curation(brand, &result);
 
     match result {
@@ -806,21 +825,12 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
     let per_page = args.limit.clamp(1, 500) as u32;
     let offset = (args.page.max(1) - 1) as u64 * per_page as u64;
 
-    // Animated search status when stderr is a terminal; plain line otherwise.
-    let spinner = interactive.then(|| {
-        let s = ProgressBar::new_spinner();
-        s.set_style(
-            ProgressStyle::with_template("{spinner:.cyan} {msg}")
-                .unwrap()
-                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-        );
-        s.set_message(format!(
-            "Searching Wikimedia Commons for \"{}\"",
-            args.query.trim()
-        ));
-        s.enable_steady_tick(std::time::Duration::from_millis(80));
-        s
-    });
+    let ui = Ui::detect();
+    // Animated search status on a terminal; silent otherwise.
+    let spinner = ui.spinner(&format!(
+        "Searching Wikimedia Commons for \"{}\"\u{2026}",
+        args.query.trim()
+    ));
     let started = std::time::Instant::now();
 
     let mut total_hits: Option<u64> = None;
@@ -857,9 +867,7 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
         }
     }
 
-    if let Some(s) = &spinner {
-        s.finish_and_clear();
-    }
+    ui::stop(spinner);
 
     let assets = search::filter_by_license(fetched, args.license.as_deref());
     eprintln!(
@@ -1050,6 +1058,7 @@ async fn cmd_download(
     let settings = Settings::load()?;
     let provider = WikimediaClient::new(&settings)?;
     let cache = Cache::new(&settings);
+    let ui = Ui::detect();
 
     let title = if file.starts_with("File:") || file.starts_with("file:") {
         file.clone()
@@ -1059,8 +1068,10 @@ async fn cmd_download(
         file.clone()
     };
 
-    eprintln!("Fetching metadata for {title}...");
-    let asset = match provider.get_asset(&title).await? {
+    let spinner = ui.announce(&format!("Fetching metadata for {title}\u{2026}"));
+    let primary = provider.get_asset(&title).await?;
+    ui::stop(spinner);
+    let asset = match primary {
         Some(a) => a,
         None => {
             let mut candidate = None;
@@ -1081,7 +1092,9 @@ async fn cmd_download(
             } else {
                 // Fall back to a search so `download github` or `download amazon` works.
                 let raw_query = file.trim();
+                let search_spinner = ui.spinner("Searching Wikimedia Commons\u{2026}");
                 let found = search::fetch_page(&provider, &cache, raw_query, 0, 10).await?;
+                ui::stop(search_spinner);
                 let exact = found
                     .page
                     .assets
@@ -1160,27 +1173,34 @@ async fn cmd_download(
     std::fs::create_dir_all(&dest)?;
     ensure_space(&dest, asset.size_bytes.unwrap_or(0))?;
 
-    let bar = ProgressBar::new(asset.size_bytes.unwrap_or(0));
-    bar.set_style(default_style());
-    bar.set_message(format!("Downloading {}", asset.original_name));
-
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<BatchEvent>();
     let ctx = Arc::new(BatchContext {
         client: provider.client(),
         dest: dest.clone(),
         overwrite,
         concurrency: 1,
         cancel: tokio_util::sync::CancellationToken::new(),
-        events: None,
+        events: Some(tx),
     });
 
-    let stats = {
-        let mut assets = vec![asset.clone()];
-        // Reuse the batch path so naming/atomicity logic stays in one place.
-        let names = std::sync::Mutex::new(crate::download::NameAllocator::new());
-        let _ = names;
-        download_many(ctx, std::mem::take(&mut assets)).await?
+    // Reuse the batch path so naming/atomicity logic stays in one place.
+    let mut progress = ui::Progress::new(
+        &ui,
+        &format!("Downloading {}", asset.original_name),
+        asset.size_bytes.unwrap_or(0),
+    );
+    let download = download_many(ctx, vec![asset.clone()]);
+    let ui_loop = async {
+        while let Some(event) = rx.recv().await {
+            if let BatchEvent::Progress { done, .. } = event {
+                progress.update(done);
+            }
+        }
     };
-    bar.finish_and_clear();
+    let (stats, _) = tokio::join!(download, ui_loop);
+    progress.finish();
+    drop(progress);
+    let stats = stats?;
 
     metadata::write_metadata_dir(&dest, &asset.title, std::slice::from_ref(&asset))?;
 
@@ -1262,7 +1282,9 @@ fn cmd_config(init: bool) -> Result<i32> {
 
 async fn cmd_doctor(json: bool) -> Result<i32> {
     let settings = Settings::load()?;
+    let spinner = Ui::detect().spinner("Running diagnostics\u{2026}");
     let report = doctor::run(&settings).await?;
+    ui::stop(spinner);
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -1279,22 +1301,6 @@ fn cmd_version() {
 // ---------------------------------------------------------------------------
 // Shared bulk operations
 // ---------------------------------------------------------------------------
-
-fn default_style() -> ProgressStyle {
-    ProgressStyle::with_template(
-        "{spinner:.green} {msg}\n[{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {bytes}/{total_bytes} {bytes_per_sec} ETA {eta}",
-    )
-    .unwrap()
-    .progress_chars("=>─")
-}
-
-fn bulk_style() -> ProgressStyle {
-    ProgressStyle::with_template(
-        "{spinner:.green} {msg}\n[{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {bytes_per_sec} ETA {eta}",
-    )
-    .unwrap()
-    .progress_chars("=>─")
-}
 
 fn confirm(prompt: &str, assume_yes: bool) -> Result<bool> {
     if assume_yes {
@@ -1361,36 +1367,25 @@ async fn run_downloads(
         events: Some(tx),
     });
 
-    let multi = MultiProgress::new();
-    let overall = multi.add(ProgressBar::new(assets.len() as u64));
-    overall.set_style(bulk_style());
-    overall.set_message(format!("Downloading {} files", assets.len()));
+    let ui = Ui::detect();
+    let spinner = ui.spinner(&format!("Downloading {} file(s)\u{2026}", assets.len()));
 
     let download = download_many(ctx, assets.to_vec());
     let ui_loop = async {
         while let Some(event) = rx.recv().await {
-            match event {
-                BatchEvent::Batch { stats } => {
-                    overall.set_position((stats.completed + stats.failed + stats.skipped) as u64);
-                    overall.set_message(format!(
-                        "Completed: {}  Failed: {}  Skipped: {}",
-                        stats.completed, stats.failed, stats.skipped
-                    ));
-                }
-                BatchEvent::Finished {
-                    name,
-                    status: crate::download::FileStatus::Failed(e),
-                    ..
-                } => {
-                    tracing::warn!("{name}: {e}");
-                }
-                _ => {}
+            if let BatchEvent::Finished {
+                name,
+                status: crate::download::FileStatus::Failed(e),
+                ..
+            } = event
+            {
+                tracing::warn!("{name}: {e}");
             }
         }
     };
 
     let (stats, _) = tokio::join!(download, ui_loop);
-    overall.finish_and_clear();
+    ui::stop(spinner);
     stats
 }
 
@@ -1423,29 +1418,11 @@ async fn run_zip(
         return Err(Error::Other("cancelled".into()));
     }
 
-    let bar = ProgressBar::new(assets.len() as u64);
-    bar.set_style(bulk_style());
-    bar.set_message("Preparing archive");
-
-    let bar_clone = bar.clone();
-    let callback = move |ev: ZipEvent| {
-        let label = match ev.phase {
-            archive::ZipPhase::Downloading => format!(
-                "Downloading {}",
-                ev.current_name.clone().unwrap_or_default()
-            ),
-            archive::ZipPhase::Packing => "Packing ZIP".to_string(),
-            archive::ZipPhase::Finalizing => "Finalizing".to_string(),
-        };
-        bar_clone.set_message(label);
-        if matches!(ev.phase, archive::ZipPhase::Packing) {
-            bar_clone.set_length(ev.total as u64);
-            bar_clone.set_position(ev.done as u64);
-        } else {
-            bar_clone.set_position(ev.done as u64);
-        }
-    };
-
+    let ui = Ui::detect();
+    let spinner = ui.spinner(&format!(
+        "Creating ZIP archive ({} file(s))\u{2026}",
+        assets.len()
+    ));
     let report = create_zip(
         &provider.client(),
         assets,
@@ -1454,10 +1431,10 @@ async fn run_zip(
         query,
         settings.max_concurrency,
         &tokio_util::sync::CancellationToken::new(),
-        Some(Box::new(callback)),
+        None,
     )
     .await;
-    bar.finish_and_clear();
+    ui::stop(spinner);
     report
 }
 
