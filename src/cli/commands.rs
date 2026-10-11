@@ -871,7 +871,7 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
 
     let assets = search::filter_by_license(fetched, args.license.as_deref());
     eprintln!(
-        "\u{2713} {} result(s) in {}ms",
+        "\u{2713} {} result(s) in {}",
         assets.len(),
         crate::models::format_ms(started.elapsed().as_millis() as u64)
     );
@@ -934,6 +934,10 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
                 .collect();
 
             if !local_files.is_empty() {
+                let spinner = ui.spinner(&format!(
+                    "Creating ZIP archive ({} file(s))\u{2026}",
+                    local_files.len()
+                ));
                 let report = archive::create_zip_from_local_files(
                     &zip_path,
                     &zip_stem(&args.query),
@@ -941,7 +945,9 @@ async fn cmd_search(args: SearchArgs) -> Result<i32> {
                     &assets,
                     &local_files,
                 )
-                .await?;
+                .await;
+                ui::stop(spinner);
+                let report = report?;
                 eprintln!(
                     "\u{2713} Created {} ({} files, {})",
                     report.path.display(),
@@ -1143,7 +1149,7 @@ async fn cmd_download(
             if use_project {
                 if let Some(ctx) = crate::project::find_project_context() {
                     eprintln!(
-                        "\x1b[1;36m\u{2139}\x1b[0m Detected {} project: \x1b[1m{}\x1b[0m",
+                        "[project] Detected {} project: {}",
                         ctx.kind.display_name(),
                         ctx.root_name()
                     );
