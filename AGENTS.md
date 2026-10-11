@@ -25,3 +25,8 @@
 4. **Preserve Security & Path Sanitization**:
    - All filenames must continue to pass through `core::security::safe_join` and `sanitize_filename`.
    - Never write outside the user-specified directory.
+
+5. **Keep `COMMANDS.md` Synchronized**:
+   - `COMMANDS.md` is the single source of truth for all CLI commands, subcommands, arguments, flags, shortcuts, and environment variables.
+   - Whenever any CLI command, subcommand, flag, shortcut, or behavior is added, modified, or removed, you MUST update [`COMMANDS.md`](COMMANDS.md) to reflect the changes with exact syntax and examples.
+

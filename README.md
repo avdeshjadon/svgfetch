@@ -192,10 +192,13 @@ SVGFetch distinguishes related entities through semantic resolution and entity-f
 
 ## Command Reference
 
+> 📖 **Full Command Reference**: For the exhaustive guide covering every command, subcommand, option, interactive shortcut, and automation recipe, refer to [`COMMANDS.md`](COMMANDS.md).
+
 | Command | Description |
 | --- | --- |
 | `svgfetch <brand>` | Directly download a brand asset into the current project or folder |
 | `svgfetch` | Launch full interactive terminal interface |
+| `svgfetch suggest <brand>` | Request missing brand for autonomous curation into `svgfetch-icons` |
 | `svgfetch info <asset>` | Inspect asset metadata (license, creator, dimensions, URL) without downloading |
 | `svgfetch search <query>` | Search Commons without interactive UI |
 | `svgfetch download <title>` | Download a specific file by name or title |

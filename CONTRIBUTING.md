@@ -93,6 +93,10 @@ The provider abstraction in `src/api/provider.rs` means a second SVG source can
 be added without touching the UI or download code. Reuse it rather than calling
 Wikimedia directly from a new command.
 
+## Command Documentation Policy
+
+When adding, modifying, or removing any CLI command, subcommand, flag, argument, or interactive shortcut, you **MUST** update [`COMMANDS.md`](COMMANDS.md) in the same commit/PR.
+
 ## License
 
 By contributing, you agree your contributions are licensed under the crate's
