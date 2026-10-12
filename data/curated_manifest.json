@@ -6253,6 +6253,7 @@
     "url": "https://instagram.com/",
     "files": [
       "meta/instagram-icon.svg",
+      "meta/instagram-logo.svg",
       "meta/instagram.svg"
     ]
   },
@@ -13324,15 +13325,6 @@
     "files": [
       "meta/whatsapp-icon.svg",
       "meta/whatsapp.svg"
-    ]
-  },
-  {
-    "name": "Whatsapp Monochrome",
-    "shortname": "whatsapp-monochrome",
-    "category": "meta",
-    "url": "",
-    "files": [
-      "meta/whatsapp-monochrome-icon.svg"
     ]
   },
   {

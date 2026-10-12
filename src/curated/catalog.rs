@@ -32,12 +32,15 @@ impl CuratedEntry {
         let mut icon_file = None;
         let mut full_file = None;
 
+        let canonical_name = format!("{}.svg", self.shortname.to_lowercase());
         for file in &self.files {
             let lower = file.to_lowercase();
             if lower.contains("-icon") || lower.contains("_icon") {
                 if icon_file.is_none() {
                     icon_file = Some(file.clone());
                 }
+            } else if lower.ends_with(&canonical_name) {
+                full_file = Some(file.clone());
             } else if full_file.is_none() {
                 full_file = Some(file.clone());
             }
