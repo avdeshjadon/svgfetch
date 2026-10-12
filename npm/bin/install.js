@@ -397,7 +397,15 @@ async function install() {
 }
 
 if (require.main === module) {
-  install().catch(() => process.exit(0));
+  install()
+    .then(() => {
+      showCursor();
+      process.exit(0);
+    })
+    .catch(() => {
+      showCursor();
+      process.exit(0);
+    });
 }
 
 module.exports = { install, getTarget, VERSION, REPO };
