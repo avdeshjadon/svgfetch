@@ -34,8 +34,6 @@ const TERM_DUMB = process.env.TERM === "dumb";
 const useColor = isTTY && !NO_COLOR && !TERM_DUMB;
 const useAnim = useColor;
 
-const GLYPHS = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
-
 function sgr(code, text) {
   return useColor ? `\x1b[${code}m${text}\x1b[0m` : `${text}`;
 }
@@ -88,39 +86,6 @@ try {
   });
 } catch (_) {}
 
-function scanner(tick) {
-  const n = 10;
-  const period = 2 * (n - 1);
-  const p = tick % period;
-  const pos = p < n ? p : period - p;
-  const dir = p < n ? 1 : -1;
-  let out = "";
-  for (let i = 0; i < n; i++) {
-    let code, cell;
-    if (i === pos) {
-      code = "1;38;5;209";
-      cell = "■";
-    } else if (i === pos - dir) {
-      code = "38;5;173";
-      cell = "▪";
-    } else if (i === pos - 2 * dir) {
-      code = "38;5;130";
-      cell = "▪";
-    } else {
-      code = "38;5;238";
-      cell = "▪";
-    }
-    out += sgr(code, cell);
-  }
-  return out;
-}
-
-function thinkingFrame(tick, label, elapsedMs) {
-  const glyph = GLYPHS[Math.floor(tick / 2) % GLYPHS.length];
-  const secs = `${(elapsedMs / 1000).toFixed(1)}s`;
-  if (!useColor) return `  ${glyph} ${label}…  ${secs}`;
-  return `  ${accent(glyph)} ${accent(label)}…  ${scanner(tick)}  ${dim(secs)}`;
-}
 
 function downloadFrame(label, received, total, elapsedMs) {
   const pct = total > 0 ? Math.min(100, Math.round((received * 100) / total)) : 0;
@@ -150,28 +115,11 @@ function beginStep(label, index) {
   const startedAt = Date.now();
   const children = [];
   let warned = false;
-  let spinnerTimer = null;
-  let tick = 0;
-
-  if (useAnim) {
-    hideCursor();
-    spinnerTimer = setInterval(() => {
-      write(`\r\x1b[2K${thinkingFrame(tick, label, Date.now() - startedAt)}`);
-      tick++;
-    }, TICK_MS);
-  }
 
   return {
     startedAt,
-    get spinning() {
-      return spinnerTimer !== null;
-    },
-    toProgress() {
-      if (spinnerTimer !== null) {
-        clearInterval(spinnerTimer);
-        spinnerTimer = null;
-      }
-    },
+    spinning: false,
+    toProgress() {},
     child(kind, tag, text) {
       if (kind === "ok") TALLY.done++;
       else if (kind === "skip") TALLY.skipped++;
@@ -182,10 +130,6 @@ function beginStep(label, index) {
       children.push([kind, tag, text]);
     },
     end() {
-      if (spinnerTimer !== null) {
-        clearInterval(spinnerTimer);
-        spinnerTimer = null;
-      }
       let elapsed = Date.now() - startedAt;
       if (useAnim && elapsed < MIN_STEP_MS) elapsed = MIN_STEP_MS;
       const dot = warned ? yellow("●") : green("●");
