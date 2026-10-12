@@ -6247,17 +6247,6 @@
     ]
   },
   {
-    "name": "Instagram",
-    "shortname": "instagram",
-    "category": "meta",
-    "url": "https://instagram.com/",
-    "files": [
-      "meta/instagram-icon.svg",
-      "meta/instagram-logo.svg",
-      "meta/instagram.svg"
-    ]
-  },
-  {
     "name": "Intel",
     "shortname": "intel",
     "category": "hardware",
