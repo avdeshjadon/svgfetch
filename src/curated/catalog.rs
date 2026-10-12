@@ -39,9 +39,7 @@ impl CuratedEntry {
                 if icon_file.is_none() {
                     icon_file = Some(file.clone());
                 }
-            } else if lower.ends_with(&canonical_name) {
-                full_file = Some(file.clone());
-            } else if full_file.is_none() {
+            } else if lower.ends_with(&canonical_name) || full_file.is_none() {
                 full_file = Some(file.clone());
             }
         }
