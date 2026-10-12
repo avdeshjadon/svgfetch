@@ -331,8 +331,8 @@ pub fn run_uninstall(yes: bool) -> Result<i32> {
         "Thank you for using svgfetch! Until next time!".to_string(),
         String::new(),
         "Reinstall anytime with:".to_string(),
-        "  npm install -g svgfetch".to_string(),
-        "  curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
+        "  • npm install -g svgfetch".to_string(),
+        "  • curl -fsSL https://raw.githubusercontent.com/avdeshjadon/svgfetch/main/install.sh | sh"
             .to_string(),
     ]);
     println!();
